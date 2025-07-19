@@ -12,11 +12,16 @@ library(googledrive)   # For Google Drive integration
 
 # --- Google Sheets Authentication and Setup ---
 
-# This tells googlesheets4 to use the credentials stored in the environment variable
-# on Posit Connect, without needing a browser-based login.
-options(gargle_oauth_cache = ".secrets")
-drive_auth(cache = ".secrets", email = TRUE)
-gs4_auth(token = drive_token())
+# This authentication method is for a deployed environment like Posit Connect.
+# It uses the service account credentials stored in the environment variable.
+# Ensure GOOGLE_APPLICATION_CREDENTIALS and SHEET_ID are set in your deployment environment.
+if (Sys.getenv("GOOGLE_APPLICATION_CREDENTIALS") != "") {
+  gs4_auth(path = Sys.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+} else {
+  # Fallback for local development (will prompt for interactive login if no .secrets folder)
+  gs4_auth()
+}
+
 
 # Get the Sheet ID from the environment variable set in Posit Connect
 sheet_id <- Sys.getenv("SHEET_ID")
