@@ -45,9 +45,10 @@ shinyServer(function(input, output, session) {
   load_data <- function() {
     tryCatch({
       # Read the "Restaurants" sheet, specifying column types
-      restaurants_data <- read_sheet(sheet_id, sheet = "Restaurants", col_types = "cDncs")
-      # Read the "Scores" sheet
-      scores_data <- read_sheet(sheet_id, sheet = "Scores", col_types = "ccnnnn")
+      # Corrected col_types from "cDncs" to "cDncc"
+      restaurants_data <- read_sheet(sheet_id, sheet = "Restaurants", col_types = "cDncc")
+      # Read the "Scores" sheet, using 'd' for double to handle decimal scores
+      scores_data <- read_sheet(sheet_id, sheet = "Scores", col_types = "ccdddd")
       
       # Update the reactive values
       rv$restaurants <- restaurants_data
