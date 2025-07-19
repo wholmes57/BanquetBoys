@@ -27,7 +27,6 @@ shinyUI(navbarPage(
                     wellPanel(
                       h3("Add a New Dining Spot"),
                       textInput("new_restaurant_name", "Restaurant Name:", ""),
-                      # Added address input
                       textInput("new_restaurant_address", "Restaurant Address:", placeholder = "e.g., 123 Main Street, London"),
                       dateInput("visit_date", "Date of Visit:", value = Sys.Date(), format = "dd/mm/yyyy"),
                       numericInput("cost_per_person", "Cost Per Person (£):", value = 30, min = 0, step = 1),
@@ -74,9 +73,14 @@ shinyUI(navbarPage(
   
   # New Tab: Map
   tabPanel("Map",
-           # Use fillPage for a full-screen map experience
-           fillPage(
-             leafletOutput("restaurant_map", height = "100%")
+           # Reverted to a standard fluidPage layout to fix scrolling
+           fluidPage(
+             fluidRow(
+               column(12,
+                      # Set a large, fixed pixel height for the map
+                      leafletOutput("restaurant_map", height = "800px") 
+               )
+             )
            )
   ),
   
