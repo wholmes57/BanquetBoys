@@ -5,42 +5,54 @@ library(dplyr)
 library(ggplot2)
 library(tidyr)
 library(DT)
-library(RColorBrewer) # Added for color palettes
-library(ggradar)      # Added for spider web plots
+library(RColorBrewer) 
+library(ggradar)
+library(googlesheets4) # For Google Sheets integration
+library(googledrive)   # For Google Drive integration
+
+# --- Google Sheets Authentication and Setup ---
+
+# This tells googlesheets4 to use the credentials stored in the environment variable
+# on Posit Connect, without needing a browser-based login.
+options(gargle_oauth_cache = ".secrets")
+drive_auth(cache = ".secrets", email = TRUE)
+gs4_auth(token = drive_token())
+
+# Get the Sheet ID from the environment variable set in Posit Connect
+sheet_id <- Sys.getenv("SHEET_ID")
 
 # The entire server logic must be wrapped in this function
 shinyServer(function(input, output, session) {
   
-  # --- File Paths for Data Persistence ---
-  restaurants_file <- "restaurants.rds"
-  scores_file <- "scores.rds"
-  
-  # --- Data Loading and Migration ---
-  restaurants_data <- if (file.exists(restaurants_file)) {
-    readRDS(restaurants_file)
-  } else {
-    data.frame(Name = character(0), Date = as.Date(character(0)), CostPerPerson = numeric(0), 
-               ChosenBy = character(0), PriceCategory = character(0), stringsAsFactors = FALSE)
-  }
-  if (!"Date" %in% names(restaurants_data)) restaurants_data$Date <- as.Date(NA)
-  if (!"CostPerPerson" %in% names(restaurants_data)) restaurants_data$CostPerPerson <- as.numeric(NA)
-  
-  
-  # --- Reactive Values for Data Storage ---
+  # --- Reactive Values to hold a local copy of the data ---
   rv <- reactiveValues(
-    restaurants = restaurants_data,
-    scores = if (file.exists(scores_file)) {
-      readRDS(scores_file)
-    } else {
-      data.frame(Person = character(), Restaurant = character(), Food = numeric(), Value = numeric(), Experience = numeric(), Overall = numeric(), stringsAsFactors = FALSE)
-    }
+    restaurants = data.frame(),
+    scores = data.frame()
   )
   
-  # --- Observer to Save Data on Any Change ---
-  observe({
-    saveRDS(rv$restaurants, restaurants_file)
-    saveRDS(rv$scores, scores_file)
-  })
+  # --- Function to load data from Google Sheets ---
+  load_data <- function() {
+    tryCatch({
+      # Read the "Restaurants" sheet, specifying column types
+      restaurants_data <- read_sheet(sheet_id, sheet = "Restaurants", col_types = "cDncs")
+      # Read the "Scores" sheet
+      scores_data <- read_sheet(sheet_id, sheet = "Scores", col_types = "ccnnnn")
+      
+      # Update the reactive values
+      rv$restaurants <- restaurants_data
+      rv$scores <- scores_data
+      
+      # Trigger a refresh of the restaurant selector UI
+      updateSelectInput(session, "restaurant_selector", choices = rv$restaurants$Name)
+      
+    }, error = function(e) {
+      # If there's an error (e.g., sheets are empty), show a notification
+      showNotification(paste("Error loading data:", e$message), type = "error", duration = 10)
+    })
+  }
+  
+  # Load data when the app starts
+  load_data()
   
   # --- Professional Plot Theme ---
   professional_theme <- theme_minimal(base_size = 15) +
@@ -59,23 +71,36 @@ shinyServer(function(input, output, session) {
     if (new_name != "" && !new_name %in% rv$restaurants$Name) {
       new_restaurant_data <- data.frame(
         Name = new_name, Date = input$visit_date, CostPerPerson = input$cost_per_person,
-        ChosenBy = input$chosen_by_selector, PriceCategory = input$price_category_selector,
-        stringsAsFactors = FALSE
+        ChosenBy = input$chosen_by_selector, PriceCategory = input$price_category_selector
       )
-      rv$restaurants <- rbind(rv$restaurants, new_restaurant_data)
+      
+      # Append the new row to the Google Sheet
+      sheet_append(sheet_id, new_restaurant_data, sheet = "Restaurants")
+      showNotification("Restaurant added successfully!", type = "message")
       updateTextInput(session, "new_restaurant_name", value = "")
+      load_data() # Reload data to reflect changes
     }
   })
+  
   output$delete_restaurant_ui <- renderUI({
     req(nrow(rv$restaurants) > 0)
     selectInput("restaurant_to_delete", "Select Restaurant to Delete:", choices = rv$restaurants$Name)
   })
+  
   observeEvent(input$delete_restaurant_btn, {
     req(input$restaurant_to_delete)
     restaurant_name <- input$restaurant_to_delete
-    rv$scores <- rv$scores %>% filter(Restaurant != restaurant_name)
-    rv$restaurants <- rv$restaurants %>% filter(Name != restaurant_name)
-    showModal(modalDialog(title = "Success!", paste("Restaurant '", restaurant_name, "' and all its scores have been deleted."), easyClose = TRUE, footer = NULL))
+    
+    # Filter out the deleted restaurant and its scores
+    updated_restaurants <- rv$restaurants %>% filter(Name != restaurant_name)
+    updated_scores <- rv$scores %>% filter(Restaurant != restaurant_name)
+    
+    # Overwrite the sheets with the updated data
+    write_sheet(updated_restaurants, sheet_id, sheet = "Restaurants")
+    write_sheet(updated_scores, sheet_id, sheet = "Scores")
+    
+    showNotification(paste("Restaurant '", restaurant_name, "' and all its scores have been deleted."), type = "warning")
+    load_data() # Reload data
   })
   
   output$restaurant_list_table <- DT::renderDataTable({
@@ -93,27 +118,49 @@ shinyServer(function(input, output, session) {
     req(nrow(rv$restaurants) > 0)
     selectInput("restaurant_selector", "Select Restaurant:", choices = rv$restaurants$Name)
   })
+  
   observeEvent(input$submit_score_btn, {
     req(input$restaurant_selector)
     overall_score <- round((input$food_score + input$value_score + input$experience_score) / 3, 2)
     new_score <- data.frame(
       Person = input$person_selector, Restaurant = input$restaurant_selector,
       Food = input$food_score, Value = input$value_score, Experience = input$experience_score,
-      Overall = overall_score, stringsAsFactors = FALSE
+      Overall = overall_score
     )
+    
+    # Check if a score for this person and restaurant already exists
     existing_row_index <- which(rv$scores$Person == input$person_selector & rv$scores$Restaurant == input$restaurant_selector)
-    if (length(existing_row_index) > 0) rv$scores[existing_row_index, ] <- new_score else rv$scores <- rbind(rv$scores, new_score)
-    showModal(modalDialog(title = "Success!", paste("Your scores for", input$restaurant_selector, "have been recorded."), easyClose = TRUE, footer = NULL))
+    
+    if (length(existing_row_index) > 0) {
+      # If it exists, update the local data frame
+      rv$scores[existing_row_index, ] <- new_score
+    } else {
+      # Otherwise, add it as a new row
+      rv$scores <- rbind(rv$scores, new_score)
+    }
+    
+    # Overwrite the entire sheet with the updated local data frame
+    write_sheet(rv$scores, sheet_id, sheet = "Scores")
+    showNotification("Scores submitted successfully!", type = "message")
+    load_data() # Reload data
   })
+  
   output$delete_score_ui <- renderUI({
     req(nrow(rv$scores) > 0)
     choices <- paste(rv$scores$Person, "-", rv$scores$Restaurant)
     selectInput("score_to_delete", "Select Score to Delete:", choices = choices)
   })
+  
   observeEvent(input$delete_score_btn, {
     req(input$score_to_delete)
     selected_index <- which(paste(rv$scores$Person, "-", rv$scores$Restaurant) == input$score_to_delete)
-    if(length(selected_index) > 0) rv$scores <- rv$scores[-selected_index[1], ]
+    
+    if(length(selected_index) > 0) {
+      updated_scores <- rv$scores[-selected_index[1], ]
+      write_sheet(updated_scores, sheet_id, sheet = "Scores")
+      showNotification("Score deleted successfully!", type = "warning")
+      load_data() # Reload data
+    }
   })
   
   output$scores_table <- DT::renderDataTable({
@@ -315,29 +362,22 @@ shinyServer(function(input, output, session) {
       scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, 1))
   })
   
-  # Updated Spider Web Plot
   output$by_person_spider_plot <- renderPlot({
     req(nrow(rv$scores) > 0)
     
     plot_data <- avg_scores_by_person_reactive() %>%
       select(Person, Food, Value, Experience, Overall)
     
-    # --- Manual Scaling to fix ggradar issues ---
-    
-    # 1. Define the desired scale based on the data range
     data_range <- plot_data %>% select(-Person)
     min_val <- min(data_range, na.rm = TRUE)
     max_val <- max(data_range, na.rm = TRUE)
     
-    # Reverted to the previous buffer of 0.2 for stability
     grid_min <- min_val - 0.2
     grid_max <- max_val + 0.2
     
-    # 2. Scale the data to a 0-1 range
     scaled_plot_data <- plot_data %>%
       mutate(across(where(is.numeric), ~ (. - grid_min) / (grid_max - grid_min)))
     
-    # 3. Create labels for the original scale
     grid_mid <- (grid_min + grid_max) / 2
     radar_labels <- c(
       as.character(round(grid_min, 1)), 
@@ -345,11 +385,10 @@ shinyServer(function(input, output, session) {
       as.character(round(grid_max, 1))
     )
     
-    # 4. Plot the SCALED data but use the ORIGINAL labels
     ggradar(
       scaled_plot_data, 
       values.radar = radar_labels,
-      grid.min = 0, # Use 0-1 scale for the plot
+      grid.min = 0,
       grid.mid = 0.5,
       grid.max = 1,
       group.line.width = 1, 
