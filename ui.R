@@ -1,11 +1,23 @@
 # ui.R
 # Load necessary libraries
 library(shiny)
+library(shinythemes) # Added for professional themes
 library(ggplot2)
+library(DT)
 
 # Define the user interface
 shinyUI(navbarPage(
+  theme = shinytheme("cerulean"), # Applied a clean, professional theme
   "Banquet Boys", # App Title
+  
+  # Custom CSS to add a bit more padding for a cleaner look
+  tags$head(
+    tags$style(HTML("
+            .tab-content {
+                padding-top: 20px;
+            }
+        "))
+  ),
   
   # Tab 1: Manage Restaurants
   tabPanel("Manage Restaurants",
@@ -14,7 +26,6 @@ shinyUI(navbarPage(
                     wellPanel(
                       h3("Add a New Dining Spot"),
                       textInput("new_restaurant_name", "Restaurant Name:", ""),
-                      # New inputs for date and cost
                       dateInput("visit_date", "Date of Visit:", value = Sys.Date(), format = "dd/mm/yyyy"),
                       numericInput("cost_per_person", "Cost Per Person (£):", value = 30, min = 0, step = 1),
                       selectInput("chosen_by_selector", "Chosen By:",
@@ -31,8 +42,7 @@ shinyUI(navbarPage(
              ),
              column(6,
                     h4("Current Restaurant List"),
-                    # This table will now show the new columns
-                    tableOutput("restaurant_list_table")
+                    DT::dataTableOutput("restaurant_list_table")
              )
            )),
   
@@ -55,7 +65,7 @@ shinyUI(navbarPage(
              ),
              mainPanel(
                h4("All Submitted Scores"),
-               tableOutput("scores_table")
+               DT::dataTableOutput("scores_table")
              )
            )),
   
@@ -64,26 +74,35 @@ shinyUI(navbarPage(
              # Sub-tab 1: Overall Analysis
              tabPanel("Overall",
                       fluidPage(
-                        h3("Category Winners"),
-                        p("The restaurant with the highest average score in each category, including the calculated 'Overall' score."),
-                        plotOutput("overall_winners_plot"),
+                        h3("Diner Averages"),
+                        p("Who gives the highest scores on average?"),
+                        plotOutput("diner_overall_avg_plot"),
                         hr(),
-                        h3("Full Data Table (Scores and Restaurant Info)"),
-                        tableOutput("overall_full_data_table")
+                        h3("Restaurant Performance by Price Category"),
+                        p("Average 'Overall' score for restaurants in each price bracket."),
+                        plotOutput("cheap_restaurants_plot"),
+                        plotOutput("medium_restaurants_plot"),
+                        plotOutput("expensive_restaurants_plot")
                       )
              ),
              # Sub-tab 2: By Restaurant Analysis
              tabPanel("By Restaurant",
-                      sidebarLayout(
-                        sidebarPanel(
-                          uiOutput("analysis_restaurant_selector_ui")
-                        ),
-                        mainPanel(
-                          h3(textOutput("by_restaurant_title")),
-                          plotOutput("by_restaurant_plot"),
-                          hr(),
-                          h4("Scores Breakdown"),
-                          tableOutput("by_restaurant_table")
+                      fluidPage(
+                        h3("Category Winners"),
+                        p("The restaurant with the highest average score in each category."),
+                        plotOutput("overall_winners_plot"),
+                        hr(),
+                        sidebarLayout(
+                          sidebarPanel(
+                            uiOutput("analysis_restaurant_selector_ui")
+                          ),
+                          mainPanel(
+                            h3(textOutput("by_restaurant_title")),
+                            plotOutput("by_restaurant_plot"),
+                            hr(),
+                            h4("Scores Breakdown"),
+                            DT::dataTableOutput("by_restaurant_table")
+                          )
                         )
                       )
              ),
@@ -95,15 +114,23 @@ shinyUI(navbarPage(
                         plotOutput("by_person_comparison_plot"),
                         hr(),
                         h3("Personal Restaurant Rankings"),
-                        p("Each diner's favorite restaurants, based on their own total scores."),
+                        p("Each diner's favorite restaurants, based on their own total scores. Click column headers to sort."),
                         fluidRow(
-                          column(6, h4("Will's Picks"), tableOutput("will_ranks")),
-                          column(6, h4("Phil's Picks"), tableOutput("phil_ranks"))
+                          column(6, h4("Will's Picks"), DT::dataTableOutput("will_ranks")),
+                          column(6, h4("Phil's Picks"), DT::dataTableOutput("phil_ranks"))
                         ),
                         fluidRow(
-                          column(6, h4("Loz's Picks"), tableOutput("loz_ranks")),
-                          column(6, h4("Pells's Picks"), tableOutput("pells_ranks"))
+                          column(6, h4("Loz's Picks"), DT::dataTableOutput("loz_ranks")),
+                          column(6, h4("Pells's Picks"), DT::dataTableOutput("pells_ranks"))
                         )
+                      )
+             ),
+             # Sub-tab 4: Raw Data
+             tabPanel("Raw Data",
+                      fluidPage(
+                        h3("Full Data Table"),
+                        p("All scores and restaurant information in one place. Use the boxes at the top of each column to filter the data."),
+                        DT::dataTableOutput("overall_full_data_table")
                       )
              )
   )
