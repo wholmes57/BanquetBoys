@@ -36,8 +36,8 @@ shinyServer(function(input, output, session) {
   # --- Function to load data from Google Sheets ---
   load_data <- function() {
     tryCatch({
-      # Updated column types to include new address and coordinate columns
-      restaurants_data <- read_sheet(sheet_id, sheet = "Restaurants", col_types = "cDncc-cdd")
+      # Corrected column types for the 8 columns in the Restaurants sheet
+      restaurants_data <- read_sheet(sheet_id, sheet = "Restaurants", col_types = "cDdcccdd")
       scores_data <- read_sheet(sheet_id, sheet = "Scores", col_types = "ccdddd")
       
       rv$restaurants <- restaurants_data
