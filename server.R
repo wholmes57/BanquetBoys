@@ -16,7 +16,13 @@ library(googledrive)   # For Google Drive integration
 # It uses the service account credentials stored in the environment variable.
 # Ensure GOOGLE_APPLICATION_CREDENTIALS and SHEET_ID are set in your deployment environment.
 if (Sys.getenv("GOOGLE_APPLICATION_CREDENTIALS") != "") {
-  gs4_auth(path = Sys.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+  # Write the JSON content from the environment variable to a temporary file
+  google_creds_json <- Sys.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+  temp_creds_file <- tempfile(fileext = ".json")
+  writeLines(google_creds_json, temp_creds_file)
+  
+  # Authenticate using the path to the temporary credentials file
+  gs4_auth(path = temp_creds_file)
 } else {
   # Fallback for local development (will prompt for interactive login if no .secrets folder)
   gs4_auth()
