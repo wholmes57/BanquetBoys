@@ -7,29 +7,21 @@ library(tidyr)
 library(DT)
 library(RColorBrewer) 
 library(ggradar)
-library(googlesheets4) # For Google Sheets integration
-library(googledrive)   # For Google Drive integration
+library(googlesheets4)
+library(googledrive)
+library(leaflet)      # For the map
+library(tidygeocoder) # For converting addresses to coordinates
 
 # --- Google Sheets Authentication and Setup ---
-
-# This authentication method is for a deployed environment like Posit Connect.
-# It uses the service account credentials stored in the environment variable.
-# Ensure GOOGLE_APPLICATION_CREDENTIALS and SHEET_ID are set in your deployment environment.
 if (Sys.getenv("GOOGLE_APPLICATION_CREDENTIALS") != "") {
-  # Write the JSON content from the environment variable to a temporary file
   google_creds_json <- Sys.getenv("GOOGLE_APPLICATION_CREDENTIALS")
   temp_creds_file <- tempfile(fileext = ".json")
   writeLines(google_creds_json, temp_creds_file)
-  
-  # Authenticate using the path to the temporary credentials file
   gs4_auth(path = temp_creds_file)
 } else {
-  # Fallback for local development (will prompt for interactive login if no .secrets folder)
   gs4_auth()
 }
 
-
-# Get the Sheet ID from the environment variable set in Posit Connect
 sheet_id <- Sys.getenv("SHEET_ID")
 
 # The entire server logic must be wrapped in this function
@@ -44,22 +36,16 @@ shinyServer(function(input, output, session) {
   # --- Function to load data from Google Sheets ---
   load_data <- function() {
     tryCatch({
-      # Read the "Restaurants" sheet, specifying column types
-      restaurants_data <- read_sheet(sheet_id, sheet = "Restaurants", col_types = "cDncc")
-      # Read the "Scores" sheet, using 'd' for double to handle decimal scores
+      # Updated column types to include new address and coordinate columns
+      restaurants_data <- read_sheet(sheet_id, sheet = "Restaurants", col_types = "cDncc-cdd")
       scores_data <- read_sheet(sheet_id, sheet = "Scores", col_types = "ccdddd")
       
-      # Update the reactive values
       rv$restaurants <- restaurants_data
       rv$scores <- scores_data
       
-      # Trigger a refresh of the restaurant selector UI
-      # FIX: Use the local variable 'restaurants_data' instead of the reactive 'rv$restaurants'
-      # to avoid accessing a reactive value outside a reactive context on initial load.
       updateSelectInput(session, "restaurant_selector", choices = restaurants_data$Name)
       
     }, error = function(e) {
-      # If there's an error (e.g., sheets are empty), show a notification
       showNotification(paste("Error loading data:", e$message), type = "error", duration = 10)
     })
   }
@@ -80,18 +66,33 @@ shinyServer(function(input, output, session) {
   
   # --- Tab 1: Manage Restaurants ---
   observeEvent(input$add_restaurant_btn, {
+    req(input$new_restaurant_name, input$new_restaurant_address)
     new_name <- trimws(input$new_restaurant_name)
+    new_address <- trimws(input$new_restaurant_address)
+    
     if (new_name != "" && !new_name %in% rv$restaurants$Name) {
+      
+      # Geocode the address to get latitude and longitude
+      geocoded_address <- geo(address = new_address, method = 'osm')
+      
+      if (is.na(geocoded_address$lat) || is.na(geocoded_address$long)) {
+        showNotification("Could not find coordinates for this address. Please try a different format.", type = "error")
+        return()
+      }
+      
       new_restaurant_data <- data.frame(
         Name = new_name, Date = input$visit_date, CostPerPerson = input$cost_per_person,
-        ChosenBy = input$chosen_by_selector, PriceCategory = input$price_category_selector
+        ChosenBy = input$chosen_by_selector, PriceCategory = input$price_category_selector,
+        Address = new_address,
+        Latitude = geocoded_address$lat,
+        Longitude = geocoded_address$long
       )
       
-      # Append the new row to the Google Sheet
       sheet_append(sheet_id, new_restaurant_data, sheet = "Restaurants")
       showNotification("Restaurant added successfully!", type = "message")
       updateTextInput(session, "new_restaurant_name", value = "")
-      load_data() # Reload data to reflect changes
+      updateTextInput(session, "new_restaurant_address", value = "")
+      load_data()
     }
   })
   
@@ -104,22 +105,20 @@ shinyServer(function(input, output, session) {
     req(input$restaurant_to_delete)
     restaurant_name <- input$restaurant_to_delete
     
-    # Filter out the deleted restaurant and its scores
     updated_restaurants <- rv$restaurants %>% filter(Name != restaurant_name)
     updated_scores <- rv$scores %>% filter(Restaurant != restaurant_name)
     
-    # Overwrite the sheets with the updated data
     write_sheet(updated_restaurants, sheet_id, sheet = "Restaurants")
     write_sheet(updated_scores, sheet_id, sheet = "Scores")
     
     showNotification(paste("Restaurant '", restaurant_name, "' and all its scores have been deleted."), type = "warning")
-    load_data() # Reload data
+    load_data()
   })
   
   output$restaurant_list_table <- DT::renderDataTable({
     req(nrow(rv$restaurants) > 0)
     DT::datatable(
-      rv$restaurants,
+      rv$restaurants %>% select(-Latitude, -Longitude), # Hide coordinates from table view
       rownames = FALSE,
       options = list(paging = FALSE, lengthChange = FALSE, searching = TRUE, info = FALSE),
       class = 'cell-border stripe'
@@ -141,21 +140,17 @@ shinyServer(function(input, output, session) {
       Overall = overall_score
     )
     
-    # Check if a score for this person and restaurant already exists
     existing_row_index <- which(rv$scores$Person == input$person_selector & rv$scores$Restaurant == input$restaurant_selector)
     
     if (length(existing_row_index) > 0) {
-      # If it exists, update the local data frame
       rv$scores[existing_row_index, ] <- new_score
     } else {
-      # Otherwise, add it as a new row
       rv$scores <- rbind(rv$scores, new_score)
     }
     
-    # Overwrite the entire sheet with the updated local data frame
     write_sheet(rv$scores, sheet_id, sheet = "Scores")
     showNotification("Scores submitted successfully!", type = "message")
-    load_data() # Reload data
+    load_data()
   })
   
   output$delete_score_ui <- renderUI({
@@ -172,7 +167,7 @@ shinyServer(function(input, output, session) {
       updated_scores <- rv$scores[-selected_index[1], ]
       write_sheet(updated_scores, sheet_id, sheet = "Scores")
       showNotification("Score deleted successfully!", type = "warning")
-      load_data() # Reload data
+      load_data()
     }
   })
   
@@ -184,6 +179,31 @@ shinyServer(function(input, output, session) {
       options = list(paging = FALSE, lengthChange = FALSE, searching = TRUE, info = FALSE),
       class = 'cell-border stripe'
     )
+  })
+  
+  # --- New Tab: Map ---
+  output$restaurant_map <- renderLeaflet({
+    req(nrow(rv$restaurants) > 0)
+    
+    # Join restaurant data with average scores
+    map_data <- rv$restaurants %>%
+      left_join(avg_scores_per_restaurant(), by = c("Name" = "Restaurant")) %>%
+      filter(!is.na(Latitude) & !is.na(Longitude))
+    
+    # Create pop-up labels
+    map_data$popup_label <- paste(
+      "<strong>", map_data$Name, "</strong><br/>",
+      "Overall Score: ", map_data$Overall, "<br/>",
+      "Chosen by: ", map_data$ChosenBy
+    )
+    
+    leaflet(data = map_data) %>%
+      addTiles() %>%
+      addMarkers(
+        lng = ~Longitude, 
+        lat = ~Latitude,
+        popup = ~popup_label
+      )
   })
   
   # --- Analysis Tab Reactives ---

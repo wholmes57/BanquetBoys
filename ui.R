@@ -4,6 +4,7 @@ library(shiny)
 library(shinythemes) # Added for professional themes
 library(ggplot2)
 library(DT)
+library(leaflet) # Added for the map
 
 # Define the user interface
 shinyUI(navbarPage(
@@ -11,7 +12,7 @@ shinyUI(navbarPage(
   "Banquet Boys", # App Title
   
   # Custom CSS to add a bit more padding for a cleaner look
-  tags$head(
+  header = tags$head(
     tags$style(HTML("
             .tab-content {
                 padding-top: 20px;
@@ -26,6 +27,8 @@ shinyUI(navbarPage(
                     wellPanel(
                       h3("Add a New Dining Spot"),
                       textInput("new_restaurant_name", "Restaurant Name:", ""),
+                      # Added address input
+                      textInput("new_restaurant_address", "Restaurant Address:", placeholder = "e.g., 123 Main Street, London"),
                       dateInput("visit_date", "Date of Visit:", value = Sys.Date(), format = "dd/mm/yyyy"),
                       numericInput("cost_per_person", "Cost Per Person (£):", value = 30, min = 0, step = 1),
                       selectInput("chosen_by_selector", "Chosen By:",
@@ -69,7 +72,15 @@ shinyUI(navbarPage(
              )
            )),
   
-  # Tab 3: Redesigned Analysis Section with Sub-tabs
+  # New Tab: Map
+  tabPanel("Map",
+           # Use fillPage for a full-screen map experience
+           fillPage(
+             leafletOutput("restaurant_map", height = "100%")
+           )
+  ),
+  
+  # Tab 4: Analysis Section
   navbarMenu("Analysis",
              # Sub-tab 1: Overall Analysis
              tabPanel("Overall",
@@ -127,7 +138,6 @@ shinyUI(navbarPage(
                       fluidPage(
                         h3("Average Scoring Tendencies"),
                         p("How each diner tends to score across all restaurants."),
-                        # Added a fluidRow to show plots side-by-side
                         fluidRow(
                           column(6, plotOutput("by_person_comparison_plot")),
                           column(6, plotOutput("by_person_spider_plot"))
