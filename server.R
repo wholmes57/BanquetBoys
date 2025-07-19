@@ -45,7 +45,6 @@ shinyServer(function(input, output, session) {
   load_data <- function() {
     tryCatch({
       # Read the "Restaurants" sheet, specifying column types
-      # Corrected col_types from "cDncs" to "cDncc"
       restaurants_data <- read_sheet(sheet_id, sheet = "Restaurants", col_types = "cDncc")
       # Read the "Scores" sheet, using 'd' for double to handle decimal scores
       scores_data <- read_sheet(sheet_id, sheet = "Scores", col_types = "ccdddd")
@@ -55,7 +54,9 @@ shinyServer(function(input, output, session) {
       rv$scores <- scores_data
       
       # Trigger a refresh of the restaurant selector UI
-      updateSelectInput(session, "restaurant_selector", choices = rv$restaurants$Name)
+      # FIX: Use the local variable 'restaurants_data' instead of the reactive 'rv$restaurants'
+      # to avoid accessing a reactive value outside a reactive context on initial load.
+      updateSelectInput(session, "restaurant_selector", choices = restaurants_data$Name)
       
     }, error = function(e) {
       # If there's an error (e.g., sheets are empty), show a notification
