@@ -6,6 +6,7 @@ library(ggplot2)
 library(tidyr)
 library(DT)
 library(RColorBrewer) # Added for color palettes
+library(ggradar)      # Added for spider web plots
 
 # The entire server logic must be wrapped in this function
 shinyServer(function(input, output, session) {
@@ -40,6 +41,17 @@ shinyServer(function(input, output, session) {
     saveRDS(rv$restaurants, restaurants_file)
     saveRDS(rv$scores, scores_file)
   })
+  
+  # --- Professional Plot Theme ---
+  professional_theme <- theme_minimal(base_size = 15) +
+    theme(
+      plot.title = element_text(face = "bold", hjust = 0.5),
+      axis.title = element_text(face = "bold"),
+      panel.grid.major = element_line(color = "#dddddd"),
+      panel.grid.minor = element_blank(),
+      legend.position = "bottom",
+      legend.title = element_blank()
+    )
   
   # --- Tab 1: Manage Restaurants ---
   observeEvent(input$add_restaurant_btn, {
@@ -132,49 +144,94 @@ shinyServer(function(input, output, session) {
   })
   
   # --- Analysis: Overall ---
-  output$diner_overall_avg_plot <- renderPlot({
-    req(nrow(rv$scores) > 0)
-    diner_avg <- rv$scores %>%
-      group_by(Person) %>%
-      summarise(AvgOverall = mean(Overall, na.rm = TRUE))
+  
+  output$chooser_summary_table <- DT::renderDataTable({
+    req(nrow(rv$restaurants) > 0)
     
-    ggplot(diner_avg, aes(x = reorder(Person, AvgOverall), y = AvgOverall, fill = Person)) +
-      geom_col() +
-      geom_text(aes(label = round(AvgOverall, 2)), hjust = 1.2, color = "white", fontface = "bold") +
-      coord_flip() +
-      labs(title = "Average Overall Score by Diner", x = "", y = "Average Score") +
-      theme_minimal(base_size = 15) +
-      theme(legend.position = "none") +
-      scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, 2)) +
-      scale_fill_brewer(palette = "Dark2") # Updated color palette
+    diners <- c("Will", "Phil", "Loz", "Pells")
+    categories <- c("Cheap", "Medium", "Expensive")
+    
+    complete_grid <- expand.grid(ChosenBy = diners, PriceCategory = categories, stringsAsFactors = FALSE)
+    
+    choice_summary <- rv$restaurants %>%
+      group_by(ChosenBy, PriceCategory) %>%
+      summarise(count = n(), .groups = 'drop')
+    
+    summary_data <- left_join(complete_grid, choice_summary, by = c("ChosenBy", "PriceCategory")) %>%
+      mutate(has_chosen = ifelse(!is.na(count), "✓", "")) %>%
+      select(ChosenBy, PriceCategory, has_chosen)
+    
+    final_table <- summary_data %>%
+      pivot_wider(names_from = PriceCategory, values_from = has_chosen, values_fill = "") %>%
+      mutate(ChosenBy = factor(ChosenBy, levels = diners)) %>%
+      arrange(ChosenBy)
+    
+    names(final_table) <- c("Diner", "Cheap", "Medium", "Expensive")
+    
+    DT::datatable(
+      final_table,
+      rownames = FALSE,
+      options = list(
+        paging = FALSE, lengthChange = FALSE, searching = FALSE, 
+        info = FALSE, ordering = FALSE,
+        columnDefs = list(list(className = 'dt-center', targets = "_all"))
+      ),
+      class = 'cell-border stripe'
+    )
   })
   
-  create_price_plot <- function(price_cat) {
-    renderPlot({
-      req(nrow(rv$scores) > 0)
-      plot_data <- full_data_reactive() %>%
-        filter(PriceCategory == price_cat) %>%
-        group_by(Restaurant) %>%
-        summarise(AvgOverall = mean(Overall, na.rm = TRUE)) %>%
-        filter(!is.na(AvgOverall))
-      
-      if(nrow(plot_data) == 0) return(NULL)
-      
-      ggplot(plot_data, aes(x = reorder(Restaurant, AvgOverall), y = AvgOverall, fill = Restaurant)) +
-        geom_col() +
-        geom_text(aes(label = round(AvgOverall, 2)), hjust = 1.2, color = "white", fontface = "bold") +
-        coord_flip() +
-        labs(title = paste(price_cat, "Restaurants"), x = "", y = "Average Overall Score") +
-        theme_minimal(base_size = 15) +
-        theme(legend.position = "none") +
-        scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, 2)) +
-        scale_fill_brewer(palette = "Dark2") # Updated color palette
-    })
-  }
+  output$diner_standings_plot <- renderPlot({
+    req(nrow(rv$scores) > 0, input$standings_category_selector)
+    
+    selected_category <- input$standings_category_selector
+    
+    chooser_performance_data <- avg_scores_per_restaurant() %>%
+      left_join(rv$restaurants, by = c("Restaurant" = "Name")) %>%
+      group_by(ChosenBy) %>%
+      summarise(AveragePerformance = mean(.data[[selected_category]], na.rm = TRUE)) %>%
+      rename(Person = ChosenBy)
+    
+    ggplot(chooser_performance_data, aes(x = reorder(Person, AveragePerformance), y = AveragePerformance, fill = Person)) +
+      geom_col() +
+      geom_text(aes(label = round(AveragePerformance, 2)), hjust = 1.2, color = "white", fontface = "bold") +
+      coord_flip() +
+      labs(title = paste("Average", selected_category, "Score of Chosen Restaurants"), x = "", y = "Average Score") +
+      professional_theme +
+      theme(legend.position = "none") +
+      scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, 2)) +
+      scale_fill_brewer(palette = "Set1")
+  })
   
-  output$cheap_restaurants_plot <- create_price_plot("Cheap")
-  output$medium_restaurants_plot <- create_price_plot("Medium")
-  output$expensive_restaurants_plot <- create_price_plot("Expensive")
+  output$price_category_performance_plot <- renderPlot({
+    req(nrow(rv$scores) > 0, input$price_plot_category_selector, input$price_category_filter_selector)
+    
+    selected_score_cat <- input$price_plot_category_selector
+    selected_price_cat <- input$price_category_filter_selector
+    
+    plot_data <- full_data_reactive()
+    
+    if (selected_price_cat != "All Restaurants") {
+      plot_data <- plot_data %>%
+        filter(PriceCategory == selected_price_cat)
+    }
+    
+    plot_data <- plot_data %>%
+      group_by(Restaurant) %>%
+      summarise(AverageScore = mean(.data[[selected_score_cat]], na.rm = TRUE)) %>%
+      filter(!is.na(AverageScore))
+    
+    if(nrow(plot_data) == 0) return(NULL)
+    
+    ggplot(plot_data, aes(x = reorder(Restaurant, AverageScore), y = AverageScore, fill = AverageScore)) +
+      geom_col() +
+      geom_text(aes(label = round(AverageScore, 2)), hjust = -0.2, color = "black", fontface = "bold") +
+      coord_flip() +
+      labs(title = paste(selected_price_cat, "Performance"), x = "", y = paste("Average", selected_score_cat, "Score")) +
+      professional_theme +
+      theme(legend.position = "none") +
+      scale_y_continuous(limits = c(0, 11), breaks = seq(0, 10, 2)) +
+      scale_fill_gradient(low = "#ff7f7f", high = "#7fbf7f")
+  })
   
   # --- Analysis: By Restaurant ---
   output$overall_winners_plot <- renderPlot({
@@ -190,10 +247,10 @@ shinyServer(function(input, output, session) {
       geom_col() +
       geom_text(aes(label = paste(Restaurant, "\n", AverageScore)), vjust = 1.2, color = "white", size = 4, fontface = "bold", lineheight = .8) +
       labs(title = "Top Restaurant by Category", x = "Category", y = "Highest Average Score") +
-      theme_minimal(base_size = 16) + 
+      professional_theme + 
       theme(legend.position = "none") +
       scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, 1)) +
-      scale_fill_brewer(palette = "Dark2") # Updated color palette
+      scale_fill_brewer(palette = "Set1")
   })
   
   output$analysis_restaurant_selector_ui <- renderUI({
@@ -227,31 +284,80 @@ shinyServer(function(input, output, session) {
       geom_col(position = "dodge") +
       geom_text(aes(label = Score), color = "white", fontface = "bold", position = position_dodge(width = 0.9), vjust = 1.5, size = 3.5) +
       labs(title = paste("Scores for", input$analysis_restaurant), x = "Diner", y = "Score") +
-      theme_minimal(base_size = 15) + 
-      scale_fill_brewer(palette = "Dark2") + # Updated color palette
+      professional_theme + 
+      scale_fill_brewer(palette = "Set1") +
       scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, 1))
   })
   
   # --- Analysis: By Person ---
-  output$by_person_comparison_plot <- renderPlot({
+  avg_scores_by_person_reactive <- reactive({
     req(nrow(rv$scores) > 0)
-    avg_scores_by_person <- rv$scores %>%
+    rv$scores %>%
       group_by(Person) %>%
       summarise(
         Food = mean(Food, na.rm = TRUE), Value = mean(Value, na.rm = TRUE),
         Experience = mean(Experience, na.rm = TRUE), Overall = mean(Overall, na.rm = TRUE),
         .groups = 'drop'
-      ) %>%
+      )
+  })
+  
+  output$by_person_comparison_plot <- renderPlot({
+    plot_data <- avg_scores_by_person_reactive() %>%
       pivot_longer(cols = -Person, names_to = "Category", values_to = "AverageScore") %>%
       mutate(Category = factor(Category, levels = c("Food", "Value", "Experience", "Overall")))
     
-    ggplot(avg_scores_by_person, aes(x = Person, y = AverageScore, fill = Category)) +
+    ggplot(plot_data, aes(x = Person, y = AverageScore, fill = Category)) +
       geom_col(position = "dodge") +
       geom_text(aes(label = round(AverageScore, 1)), color = "white", fontface = "bold", position = position_dodge(width = 0.9), vjust = 1.5, size = 3.5) +
-      labs(title = "Average Rating Tendencies by Person", x = "Person", y = "Average Score Given") +
-      theme_minimal(base_size = 15) + 
-      scale_fill_brewer(palette = "Dark2") + # Updated color palette
+      labs(title = "Average Rating Tendencies (Bar Chart)", x = "Person", y = "Average Score Given") +
+      professional_theme + 
+      scale_fill_brewer(palette = "Set1") +
       scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, 1))
+  })
+  
+  # Updated Spider Web Plot
+  output$by_person_spider_plot <- renderPlot({
+    req(nrow(rv$scores) > 0)
+    
+    plot_data <- avg_scores_by_person_reactive() %>%
+      select(Person, Food, Value, Experience, Overall)
+    
+    # --- Manual Scaling to fix ggradar issues ---
+    
+    # 1. Define the desired scale based on the data range
+    data_range <- plot_data %>% select(-Person)
+    min_val <- min(data_range, na.rm = TRUE)
+    max_val <- max(data_range, na.rm = TRUE)
+    
+    # Reverted to the previous buffer of 0.2 for stability
+    grid_min <- min_val - 0.2
+    grid_max <- max_val + 0.2
+    
+    # 2. Scale the data to a 0-1 range
+    scaled_plot_data <- plot_data %>%
+      mutate(across(where(is.numeric), ~ (. - grid_min) / (grid_max - grid_min)))
+    
+    # 3. Create labels for the original scale
+    grid_mid <- (grid_min + grid_max) / 2
+    radar_labels <- c(
+      as.character(round(grid_min, 1)), 
+      as.character(round(grid_mid, 1)), 
+      as.character(round(grid_max, 1))
+    )
+    
+    # 4. Plot the SCALED data but use the ORIGINAL labels
+    ggradar(
+      scaled_plot_data, 
+      values.radar = radar_labels,
+      grid.min = 0, # Use 0-1 scale for the plot
+      grid.mid = 0.5,
+      grid.max = 1,
+      group.line.width = 1, 
+      group.point.size = 3,
+      group.colours = brewer.pal(4, "Set1"),
+      legend.title = "Diner",
+      plot.title = "Average Rating Tendencies (Radar Chart)"
+    )
   })
   
   personal_ranks <- reactive({

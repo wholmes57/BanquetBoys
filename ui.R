@@ -74,15 +74,31 @@ shinyUI(navbarPage(
              # Sub-tab 1: Overall Analysis
              tabPanel("Overall",
                       fluidPage(
-                        h3("Diner Averages"),
-                        p("Who gives the highest scores on average?"),
-                        plotOutput("diner_overall_avg_plot"),
+                        h3("Chooser Summary"),
+                        p("Which diner has chosen a restaurant in each price category?"),
+                        DT::dataTableOutput("chooser_summary_table"),
+                        hr(),
+                        h3("Current Standings"),
+                        p("What is the average score of the restaurants chosen by each diner?"),
+                        selectInput("standings_category_selector", "Choose a Category to Compare:",
+                                    choices = c("Overall", "Food", "Value", "Experience"),
+                                    selected = "Overall"),
+                        plotOutput("diner_standings_plot"),
                         hr(),
                         h3("Restaurant Performance by Price Category"),
-                        p("Average 'Overall' score for restaurants in each price bracket."),
-                        plotOutput("cheap_restaurants_plot"),
-                        plotOutput("medium_restaurants_plot"),
-                        plotOutput("expensive_restaurants_plot")
+                        fluidRow(
+                          column(6,
+                                 selectInput("price_plot_category_selector", "Choose a Score Category:",
+                                             choices = c("Overall", "Food", "Value", "Experience"),
+                                             selected = "Overall")
+                          ),
+                          column(6,
+                                 selectInput("price_category_filter_selector", "Choose a Price Category:",
+                                             choices = c("All Restaurants", "Cheap", "Medium", "Expensive"),
+                                             selected = "All Restaurants")
+                          )
+                        ),
+                        plotOutput("price_category_performance_plot")
                       )
              ),
              # Sub-tab 2: By Restaurant Analysis
@@ -111,17 +127,21 @@ shinyUI(navbarPage(
                       fluidPage(
                         h3("Average Scoring Tendencies"),
                         p("How each diner tends to score across all restaurants."),
-                        plotOutput("by_person_comparison_plot"),
+                        # Added a fluidRow to show plots side-by-side
+                        fluidRow(
+                          column(6, plotOutput("by_person_comparison_plot")),
+                          column(6, plotOutput("by_person_spider_plot"))
+                        ),
                         hr(),
                         h3("Personal Restaurant Rankings"),
                         p("Each diner's favorite restaurants, based on their own total scores. Click column headers to sort."),
                         fluidRow(
-                          column(6, h4("Will's Picks"), DT::dataTableOutput("will_ranks")),
-                          column(6, h4("Phil's Picks"), DT::dataTableOutput("phil_ranks"))
+                          column(6, h4("Will"), DT::dataTableOutput("will_ranks")),
+                          column(6, h4("Phil"), DT::dataTableOutput("phil_ranks"))
                         ),
                         fluidRow(
-                          column(6, h4("Loz's Picks"), DT::dataTableOutput("loz_ranks")),
-                          column(6, h4("Pells's Picks"), DT::dataTableOutput("pells_ranks"))
+                          column(6, h4("Loz"), DT::dataTableOutput("loz_ranks")),
+                          column(6, h4("Pells"), DT::dataTableOutput("pells_ranks"))
                         )
                       )
              ),
