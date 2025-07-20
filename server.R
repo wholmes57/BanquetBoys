@@ -363,9 +363,11 @@ shinyServer(function(input, output, session) {
     
     ggplot(plot_data, aes(x = Person, y = Score, fill = Category)) +
       geom_col(position = "dodge") +
-      geom_text(aes(label = Score), color = "white", fontface = "bold", position = position_dodge(width = 0.9), vjust = 1.5, size = 3.5) +
+      # Updated geom_text with angle = 90
+      geom_text(aes(label = Score), color = "white", fontface = "bold", position = position_dodge(width = 0.9), angle = 90, hjust = 1.1, size = 3.5) +
       labs(title = str_wrap(paste("Scores for", input$analysis_restaurant), 20), x = "Diner", y = "Score") +
       professional_theme + 
+      theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
       scale_fill_brewer(palette = "Set1") +
       scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, 1))
   })
@@ -389,9 +391,11 @@ shinyServer(function(input, output, session) {
     
     ggplot(plot_data, aes(x = Person, y = AverageScore, fill = Category)) +
       geom_col(position = "dodge") +
-      geom_text(aes(label = round(AverageScore, 1)), color = "white", fontface = "bold", position = position_dodge(width = 0.9), vjust = 1.5, size = 3.5) +
+      # Updated geom_text with angle = 90
+      geom_text(aes(label = round(AverageScore, 1)), color = "white", fontface = "bold", position = position_dodge(width = 0.9), angle = 90, hjust = 1.1, size = 3.5) +
       labs(title = str_wrap("Average Rating Tendencies (Bar Chart)", 20), x = "Person", y = "Average Score Given") +
       professional_theme + 
+      theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
       scale_fill_brewer(palette = "Set1") +
       scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, 1))
   })
