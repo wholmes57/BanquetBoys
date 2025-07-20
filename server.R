@@ -148,11 +148,11 @@ shinyServer(function(input, output, session) {
           h4("Highs and Lows"),
           tags$ul(
             # Corrected logic to build the string safely before creating the tag
-            tags$li(HTML(sprintf("<strong>Best Food Score:</strong> %s awarded by %s for %s.", highest_food$Food[1], paste(highest_food$Person, collapse=", "), paste(unique(highest_food$Restaurant), collapse=", ")))),
-            tags$li(HTML(sprintf("<strong>Lowest Food Score:</strong> %s awarded by %s for %s.", lowest_food$Food[1], paste(lowest_food$Person, collapse=", "), paste(unique(lowest_food$Restaurant), collapse=", ")))),
-            tags$li(HTML(sprintf("<strong>Best Value Score:</strong> %s awarded by %s for %s.", highest_value$Value[1], paste(highest_value$Person, collapse=", "), paste(unique(highest_value$Restaurant), collapse=", ")))),
-            tags$li(HTML(sprintf("<strong>Lowest Value Score:</strong> %s awarded by %s for %s.", lowest_value$Value[1], paste(lowest_value$Person, collapse=", "), paste(unique(lowest_value$Restaurant), collapse=", ")))),
-            tags$li(HTML(sprintf("<strong>Best Experience Score:</strong> %s awarded by %s for %s.", highest_exp$Experience[1], paste(highest_exp$Person, collapse=", "), paste(unique(highest_exp$Restaurant), collapse=", "))))
+            tags$li(HTML(paste0("<strong>Best Food Score:</strong> ", highest_food$Food[1], " awarded by ", paste(highest_food$Person, collapse=", "), " for ", paste(unique(highest_food$Restaurant), collapse=", "), "."))),
+            tags$li(HTML(paste0("<strong>Lowest Food Score:</strong> ", lowest_food$Food[1], " awarded by ", paste(lowest_food$Person, collapse=", "), " for ", paste(unique(lowest_food$Restaurant), collapse=", "), "."))),
+            tags$li(HTML(paste0("<strong>Best Value Score:</strong> ", highest_value$Value[1], " awarded by ", paste(highest_value$Person, collapse=", "), " for ", paste(unique(highest_value$Restaurant), collapse=", "), "."))),
+            tags$li(HTML(paste0("<strong>Lowest Value Score:</strong> ", lowest_value$Value[1], " awarded by ", paste(lowest_value$Person, collapse=", "), " for ", paste(unique(lowest_value$Restaurant), collapse=", "), "."))),
+            tags$li(HTML(paste0("<strong>Best Experience Score:</strong> ", highest_exp$Experience[1], " awarded by ", paste(highest_exp$Person, collapse=", "), " for ", paste(unique(highest_exp$Restaurant), collapse=", "), ".")))
           )
       ),
       div(class = "commentary-section",
