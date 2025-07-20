@@ -37,7 +37,6 @@ shinyServer(function(input, output, session) {
   # --- Function to load data from Google Sheets ---
   load_data <- function() {
     tryCatch({
-      # Corrected column types for the 8 columns in the Restaurants sheet
       restaurants_data <- read_sheet(sheet_id, sheet = "Restaurants", col_types = "cDdcccdd")
       scores_data <- read_sheet(sheet_id, sheet = "Scores", col_types = "ccdddd")
       
@@ -65,6 +64,73 @@ shinyServer(function(input, output, session) {
       legend.title = element_blank()
     )
   
+  # --- New Tab: Commentary ---
+  output$commentary_output <- renderUI({
+    req(nrow(rv$scores) > 0, nrow(rv$restaurants) > 0)
+    
+    # --- Analysis for Commentary ---
+    
+    # Most generous raters by category
+    generous_food <- rv$scores %>% group_by(Person) %>% summarise(Avg = mean(Food, na.rm = TRUE)) %>% filter(Avg == max(Avg))
+    generous_value <- rv$scores %>% group_by(Person) %>% summarise(Avg = mean(Value, na.rm = TRUE)) %>% filter(Avg == max(Avg))
+    generous_exp <- rv$scores %>% group_by(Person) %>% summarise(Avg = mean(Experience, na.rm = TRUE)) %>% filter(Avg == max(Avg))
+    
+    # Price effect on scores
+    price_effect <- full_data_reactive() %>%
+      group_by(PriceCategory) %>%
+      summarise(AvgOverall = mean(Overall, na.rm = TRUE)) %>%
+      arrange(desc(AvgOverall))
+    
+    # Self-rating bias
+    self_ratings <- full_data_reactive() %>%
+      filter(Person == ChosenBy) %>%
+      group_by(Person) %>%
+      summarise(AvgSelfScore = mean(Overall, na.rm = TRUE))
+    
+    # Most contentious restaurant
+    contentious_restaurant <- rv$scores %>%
+      group_by(Restaurant) %>%
+      summarise(SD_Overall = sd(Overall, na.rm = TRUE)) %>%
+      filter(SD_Overall == max(SD_Overall, na.rm = TRUE))
+    
+    # --- Build the UI ---
+    tagList(
+      div(class = "commentary-section",
+          h4("The Raters: A Deeper Dive"),
+          tags$ul(
+            tags$li(strong("The Foodie: "), paste(generous_food$Person, collapse = ", "), " gives the highest average scores for Food."),
+            tags$li(strong("The Bargain Hunter: "), paste(generous_value$Person, collapse = ", "), " is the most generous when it comes to Value."),
+            tags$li(strong("The Experience Seeker: "), paste(generous_exp$Person, collapse = ", "), " has the highest average for Experience.")
+          )
+      ),
+      div(class = "commentary-section",
+          h4("Does Money Buy Happiness?"),
+          p("The data shows a clear correlation between price and quality. The average scores for each price category are:"),
+          tags$ul(
+            lapply(1:nrow(price_effect), function(i) {
+              tags$li(paste0(price_effect$PriceCategory[i], ": ", round(price_effect$AvgOverall[i], 2)))
+            })
+          )
+      ),
+      div(class = "commentary-section",
+          h4("The Chooser's Bias"),
+          p("Do the boys rate the restaurants they chose higher than others? Here's the breakdown of how much higher (or lower) each diner rates their own pick on average:"),
+          tags$ul(
+            lapply(self_ratings$Person, function(diner) {
+              self_score <- self_ratings$AvgSelfScore[self_ratings$Person == diner]
+              others_score <- mean(rv$scores$Overall[rv$scores$Person == diner & rv$scores$Restaurant != rv$restaurants$Name[rv$restaurants$ChosenBy == diner]], na.rm = TRUE)
+              bias <- self_score - others_score
+              tags$li(paste0(diner, ": ", ifelse(bias > 0, "+", ""), round(bias, 2), " points higher for their own choice."))
+            })
+          )
+      ),
+      div(class = "commentary-section",
+          h4("Points of Contention"),
+          p("The most debated restaurant so far, with the biggest disagreement in 'Overall' scores, has been ", strong(contentious_restaurant$Restaurant), ".")
+      )
+    )
+  })
+  
   # --- Tab 1: Manage Restaurants ---
   observeEvent(input$add_restaurant_btn, {
     req(input$new_restaurant_name, input$new_restaurant_address)
@@ -73,7 +139,6 @@ shinyServer(function(input, output, session) {
     
     if (new_name != "" && !new_name %in% rv$restaurants$Name) {
       
-      # Geocode the address to get latitude and longitude
       geocoded_address <- geo(address = new_address, method = 'osm')
       
       if (is.na(geocoded_address$lat) || is.na(geocoded_address$long)) {
@@ -119,7 +184,7 @@ shinyServer(function(input, output, session) {
   output$restaurant_list_table <- DT::renderDataTable({
     req(nrow(rv$restaurants) > 0)
     DT::datatable(
-      rv$restaurants %>% select(-Latitude, -Longitude), # Hide coordinates from table view
+      rv$restaurants %>% select(-Latitude, -Longitude),
       rownames = FALSE,
       options = list(paging = FALSE, lengthChange = FALSE, searching = TRUE, info = FALSE),
       class = 'cell-border stripe'
@@ -186,12 +251,10 @@ shinyServer(function(input, output, session) {
   output$restaurant_map <- renderLeaflet({
     req(nrow(rv$restaurants) > 0)
     
-    # Join restaurant data with average scores
     map_data <- rv$restaurants %>%
       left_join(avg_scores_per_restaurant(), by = c("Name" = "Restaurant")) %>%
       filter(!is.na(Latitude) & !is.na(Longitude))
     
-    # Create pop-up labels
     map_data$popup_label <- paste(
       "<strong>", map_data$Name, "</strong><br/>",
       "Overall Score: ", map_data$Overall, "<br/>",
@@ -225,41 +288,6 @@ shinyServer(function(input, output, session) {
   })
   
   # --- Analysis: Overall ---
-  
-  output$chooser_summary_table <- DT::renderDataTable({
-    req(nrow(rv$restaurants) > 0)
-    
-    diners <- c("Will", "Phil", "Loz", "Pells")
-    categories <- c("Cheap", "Medium", "Expensive")
-    
-    complete_grid <- expand.grid(ChosenBy = diners, PriceCategory = categories, stringsAsFactors = FALSE)
-    
-    choice_summary <- rv$restaurants %>%
-      group_by(ChosenBy, PriceCategory) %>%
-      summarise(count = n(), .groups = 'drop')
-    
-    summary_data <- left_join(complete_grid, choice_summary, by = c("ChosenBy", "PriceCategory")) %>%
-      mutate(has_chosen = ifelse(!is.na(count), "✓", "")) %>%
-      select(ChosenBy, PriceCategory, has_chosen)
-    
-    final_table <- summary_data %>%
-      pivot_wider(names_from = PriceCategory, values_from = has_chosen, values_fill = "") %>%
-      mutate(ChosenBy = factor(ChosenBy, levels = diners)) %>%
-      arrange(ChosenBy)
-    
-    names(final_table) <- c("Diner", "Cheap", "Medium", "Expensive")
-    
-    DT::datatable(
-      final_table,
-      rownames = FALSE,
-      options = list(
-        paging = FALSE, lengthChange = FALSE, searching = FALSE, 
-        info = FALSE, ordering = FALSE,
-        columnDefs = list(list(className = 'dt-center', targets = "_all"))
-      ),
-      class = 'cell-border stripe'
-    )
-  })
   
   output$diner_standings_plot <- renderPlot({
     req(nrow(rv$scores) > 0, input$standings_category_selector)
@@ -326,14 +354,11 @@ shinyServer(function(input, output, session) {
     
     ggplot(winners_data, aes(x = Category, y = AverageScore, fill = Restaurant)) +
       geom_col() +
-      # Score inside the bar
-      geom_text(aes(label = AverageScore), vjust = 1.5, color = "white", size = 4, fontface = "bold") +
-      # Restaurant name above the bar
-      geom_text(aes(label = str_wrap(Restaurant, 15)), vjust = -0.5, color = "black", size = 4, fontface = "bold") +
+      geom_text(aes(label = str_wrap(paste(Restaurant, "\n", AverageScore), 15)), vjust = 1.2, color = "white", size = 4, fontface = "bold", lineheight = .8) +
       labs(title = "Top Restaurant by Category", x = "Category", y = "Highest Average Score") +
       professional_theme + 
       theme(legend.position = "none") +
-      scale_y_continuous(limits = c(0, 11), breaks = seq(0, 10, 1)) + # Increased limit for space
+      scale_y_continuous(limits = c(0, 11), breaks = seq(0, 10, 1)) +
       scale_fill_brewer(palette = "Set1")
   })
   

@@ -17,10 +17,16 @@ shinyUI(navbarPage(
             .tab-content {
                 padding-top: 20px;
             }
+            .commentary-section {
+                padding: 15px;
+                background-color: #f5f5f5;
+                border-radius: 5px;
+                margin-bottom: 20px;
+            }
         "))
   ),
   
-  # Tab 1: Overall Analysis (New Landing Page)
+  # Tab 1: Overall Analysis (Landing Page)
   tabPanel("Overall",
            fluidPage(
              h3("Chooser Summary"),
@@ -51,7 +57,15 @@ shinyUI(navbarPage(
            )
   ),
   
-  # Tab 2: Data Entry (New Grouped Tab)
+  # New Tab: Commentary
+  tabPanel("Commentary",
+           fluidPage(
+             h2("The Story So Far: A Statistical Overview"),
+             uiOutput("commentary_output") # Dynamic content will be rendered here
+           )
+  ),
+  
+  # Tab 3: Data Entry
   navbarMenu("Data Entry",
              tabPanel("Manage Restaurants",
                       fluidRow(
@@ -103,7 +117,7 @@ shinyUI(navbarPage(
                       ))
   ),
   
-  # Tab 3: Map
+  # Tab 4: Map
   tabPanel("Map",
            fluidPage(
              fluidRow(
@@ -114,7 +128,7 @@ shinyUI(navbarPage(
            )
   ),
   
-  # Tab 4: Analysis Section
+  # Tab 5: Analysis Section
   navbarMenu("Analysis",
              tabPanel("By Restaurant",
                       fluidPage(
