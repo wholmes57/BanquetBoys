@@ -326,11 +326,14 @@ shinyServer(function(input, output, session) {
     
     ggplot(winners_data, aes(x = Category, y = AverageScore, fill = Restaurant)) +
       geom_col() +
-      geom_text(aes(label = str_wrap(paste(Restaurant, "\n", AverageScore), 15)), vjust = 1.2, color = "white", size = 4, fontface = "bold", lineheight = .8) +
+      # Score inside the bar
+      geom_text(aes(label = AverageScore), vjust = 1.5, color = "white", size = 4, fontface = "bold") +
+      # Restaurant name above the bar
+      geom_text(aes(label = str_wrap(Restaurant, 15)), vjust = -0.5, color = "black", size = 4, fontface = "bold") +
       labs(title = "Top Restaurant by Category", x = "Category", y = "Highest Average Score") +
       professional_theme + 
       theme(legend.position = "none") +
-      scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, 1)) +
+      scale_y_continuous(limits = c(0, 11), breaks = seq(0, 10, 1)) + # Increased limit for space
       scale_fill_brewer(palette = "Set1")
   })
   
@@ -363,7 +366,6 @@ shinyServer(function(input, output, session) {
     
     ggplot(plot_data, aes(x = Person, y = Score, fill = Category)) +
       geom_col(position = "dodge") +
-      # Updated geom_text with angle = 90
       geom_text(aes(label = Score), color = "white", fontface = "bold", position = position_dodge(width = 0.9), angle = 90, hjust = 1.1, size = 3.5) +
       labs(title = str_wrap(paste("Scores for", input$analysis_restaurant), 20), x = "Diner", y = "Score") +
       professional_theme + 
@@ -391,7 +393,6 @@ shinyServer(function(input, output, session) {
     
     ggplot(plot_data, aes(x = Person, y = AverageScore, fill = Category)) +
       geom_col(position = "dodge") +
-      # Updated geom_text with angle = 90
       geom_text(aes(label = round(AverageScore, 1)), color = "white", fontface = "bold", position = position_dodge(width = 0.9), angle = 90, hjust = 1.1, size = 3.5) +
       labs(title = str_wrap("Average Rating Tendencies (Bar Chart)", 20), x = "Person", y = "Average Score Given") +
       professional_theme + 
