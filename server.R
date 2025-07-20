@@ -70,12 +70,10 @@ shinyServer(function(input, output, session) {
     
     # --- Analysis for Commentary ---
     
-    # Most generous raters by category
     generous_food <- rv$scores %>% group_by(Person) %>% summarise(Avg = mean(Food, na.rm = TRUE)) %>% filter(Avg == max(Avg))
     generous_value <- rv$scores %>% group_by(Person) %>% summarise(Avg = mean(Value, na.rm = TRUE)) %>% filter(Avg == max(Avg))
     generous_exp <- rv$scores %>% group_by(Person) %>% summarise(Avg = mean(Experience, na.rm = TRUE)) %>% filter(Avg == max(Avg))
     
-    # Price effect on scores
     price_effect <- full_data_reactive() %>%
       group_by(PriceCategory) %>%
       summarise(
@@ -84,7 +82,6 @@ shinyServer(function(input, output, session) {
       ) %>%
       arrange(desc(AvgOverall))
     
-    # Self-rating bias (Corrected Logic)
     self_ratings <- full_data_reactive() %>%
       mutate(is_own_choice = (Person == ChosenBy)) %>%
       group_by(Person) %>%
@@ -94,7 +91,6 @@ shinyServer(function(input, output, session) {
       ) %>%
       mutate(Bias = AvgSelfScore - AvgOthersScore)
     
-    # Most contentious restaurant (Corrected Logic)
     contentious_restaurant <- rv$scores %>%
       group_by(Restaurant) %>%
       summarise(SD_Overall = sd(Overall, na.rm = TRUE), .groups = 'drop') %>%
@@ -105,7 +101,6 @@ shinyServer(function(input, output, session) {
         filter(SD_Overall == max(SD_Overall, na.rm = TRUE))
     }
     
-    # Highest and lowest scores
     highest_food <- rv$scores %>% filter(Food == max(Food, na.rm = TRUE))
     lowest_food <- rv$scores %>% filter(Food == min(Food, na.rm = TRUE))
     highest_value <- rv$scores %>% filter(Value == max(Value, na.rm = TRUE))
@@ -152,11 +147,12 @@ shinyServer(function(input, output, session) {
       div(class = "commentary-section",
           h4("Highs and Lows"),
           tags$ul(
-            tags$li(strong("Best Food Score: "), highest_food$Food[1], " awarded by ", paste(highest_food$Person, collapse=", "), " for ", paste(unique(highest_food$Restaurant), collapse=", "), "."),
-            tags$li(strong("Lowest Food Score: "), lowest_food$Food[1], " awarded by ", paste(lowest_food$Person, collapse=", "), " for ", paste(unique(lowest_food$Restaurant), collapse=", "), "."),
-            tags$li(strong("Best Value Score: "), highest_value$Value[1], " awarded by ", paste(highest_value$Person, collapse=", "), " for ", paste(unique(highest_value$Restaurant), collapse=", "), "."),
-            tags$li(strong("Lowest Value Score: "), lowest_value$Value[1], " awarded by ", paste(lowest_value$Person, collapse=", "), " for ", paste(unique(lowest_value$Restaurant), collapse=", "), "."),
-            tags$li(strong("Best Experience Score: "), highest_exp$Experience[1], " awarded by ", paste(highest_exp$Person, collapse=", "), " for ", paste(unique(highest_exp$Restaurant), collapse=", "), ".")
+            # Corrected logic to build the string safely before creating the tag
+            tags$li(HTML(sprintf("<strong>Best Food Score:</strong> %s awarded by %s for %s.", highest_food$Food[1], paste(highest_food$Person, collapse=", "), paste(unique(highest_food$Restaurant), collapse=", ")))),
+            tags$li(HTML(sprintf("<strong>Lowest Food Score:</strong> %s awarded by %s for %s.", lowest_food$Food[1], paste(lowest_food$Person, collapse=", "), paste(unique(lowest_food$Restaurant), collapse=", ")))),
+            tags$li(HTML(sprintf("<strong>Best Value Score:</strong> %s awarded by %s for %s.", highest_value$Value[1], paste(highest_value$Person, collapse=", "), paste(unique(highest_value$Restaurant), collapse=", ")))),
+            tags$li(HTML(sprintf("<strong>Lowest Value Score:</strong> %s awarded by %s for %s.", lowest_value$Value[1], paste(lowest_value$Person, collapse=", "), paste(unique(lowest_value$Restaurant), collapse=", ")))),
+            tags$li(HTML(sprintf("<strong>Best Experience Score:</strong> %s awarded by %s for %s.", highest_exp$Experience[1], paste(highest_exp$Person, collapse=", "), paste(unique(highest_exp$Restaurant), collapse=", "))))
           )
       ),
       div(class = "commentary-section",
