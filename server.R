@@ -84,12 +84,13 @@ shinyServer(function(input, output, session) {
       ) %>%
       arrange(desc(AvgOverall))
     
-    # Self-rating bias
+    # Self-rating bias (Corrected Logic)
     self_ratings <- full_data_reactive() %>%
+      mutate(is_own_choice = (Person == ChosenBy)) %>%
       group_by(Person) %>%
       summarise(
-        AvgSelfScore = mean(Overall[Person == ChosenBy], na.rm = TRUE),
-        AvgOthersScore = mean(Overall[Person != ChosenBy], na.rm = TRUE)
+        AvgSelfScore = mean(Overall[is_own_choice], na.rm = TRUE),
+        AvgOthersScore = mean(Overall[!is_own_choice], na.rm = TRUE)
       ) %>%
       mutate(Bias = AvgSelfScore - AvgOthersScore)
     
@@ -133,7 +134,14 @@ shinyServer(function(input, output, session) {
             lapply(1:nrow(self_ratings), function(i) {
               diner <- self_ratings$Person[i]
               bias <- self_ratings$Bias[i]
-              tags$li(paste0(diner, ": ", ifelse(bias > 0, "+", ""), round(bias, 2), " points difference for their own choice."))
+              
+              # Handle cases where bias can't be calculated
+              if (is.na(bias) || is.nan(bias)) {
+                text <- paste0(diner, ": Not enough data to calculate bias.")
+              } else {
+                text <- paste0(diner, ": ", ifelse(bias >= 0, "+", ""), round(bias, 2), " points difference for their own choice.")
+              }
+              tags$li(text)
             })
           )
       ),
