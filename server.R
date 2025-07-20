@@ -78,14 +78,20 @@ shinyServer(function(input, output, session) {
     # Price effect on scores
     price_effect <- full_data_reactive() %>%
       group_by(PriceCategory) %>%
-      summarise(AvgOverall = mean(Overall, na.rm = TRUE)) %>%
+      summarise(
+        AvgOverall = mean(Overall, na.rm = TRUE),
+        AvgCost = mean(CostPerPerson, na.rm = TRUE)
+      ) %>%
       arrange(desc(AvgOverall))
     
     # Self-rating bias
     self_ratings <- full_data_reactive() %>%
-      filter(Person == ChosenBy) %>%
       group_by(Person) %>%
-      summarise(AvgSelfScore = mean(Overall, na.rm = TRUE))
+      summarise(
+        AvgSelfScore = mean(Overall[Person == ChosenBy], na.rm = TRUE),
+        AvgOthersScore = mean(Overall[Person != ChosenBy], na.rm = TRUE)
+      ) %>%
+      mutate(Bias = AvgSelfScore - AvgOthersScore)
     
     # Most contentious restaurant
     contentious_restaurant <- rv$scores %>%
@@ -93,22 +99,30 @@ shinyServer(function(input, output, session) {
       summarise(SD_Overall = sd(Overall, na.rm = TRUE)) %>%
       filter(SD_Overall == max(SD_Overall, na.rm = TRUE))
     
+    # Highest and lowest scores
+    highest_food <- rv$scores %>% filter(Food == max(Food, na.rm = TRUE))
+    lowest_food <- rv$scores %>% filter(Food == min(Food, na.rm = TRUE))
+    highest_value <- rv$scores %>% filter(Value == max(Value, na.rm = TRUE))
+    lowest_value <- rv$scores %>% filter(Value == min(Value, na.rm = TRUE))
+    highest_exp <- rv$scores %>% filter(Experience == max(Experience, na.rm = TRUE))
+    lowest_exp <- rv$scores %>% filter(Experience == min(Experience, na.rm = TRUE))
+    
     # --- Build the UI ---
     tagList(
       div(class = "commentary-section",
           h4("The Raters: A Deeper Dive"),
           tags$ul(
-            tags$li(strong("The Foodie: "), paste(generous_food$Person, collapse = ", "), " gives the highest average scores for Food."),
-            tags$li(strong("The Bargain Hunter: "), paste(generous_value$Person, collapse = ", "), " is the most generous when it comes to Value."),
-            tags$li(strong("The Experience Seeker: "), paste(generous_exp$Person, collapse = ", "), " has the highest average for Experience.")
+            tags$li(strong("The Foodie: "), paste(generous_food$Person, collapse = ", "), " gives the highest average scores for Food (", round(generous_food$Avg, 2), ")."),
+            tags$li(strong("The Bargain Hunter: "), paste(generous_value$Person, collapse = ", "), " is the most generous when it comes to Value (", round(generous_value$Avg, 2), ")."),
+            tags$li(strong("The Experience Seeker: "), paste(generous_exp$Person, collapse = ", "), " has the highest average for Experience (", round(generous_exp$Avg, 2), ").")
           )
       ),
       div(class = "commentary-section",
           h4("Does Money Buy Happiness?"),
-          p("The data shows a clear correlation between price and quality. The average scores for each price category are:"),
+          p("The data shows a clear correlation between price and quality. The average scores and cost for each price category are:"),
           tags$ul(
             lapply(1:nrow(price_effect), function(i) {
-              tags$li(paste0(price_effect$PriceCategory[i], ": ", round(price_effect$AvgOverall[i], 2)))
+              tags$li(paste0(strong(price_effect$PriceCategory[i]), ": Avg. Score of ", round(price_effect$AvgOverall[i], 2), " (Avg. Cost: £", round(price_effect$AvgCost[i], 2), ")"))
             })
           )
       ),
@@ -116,17 +130,26 @@ shinyServer(function(input, output, session) {
           h4("The Chooser's Bias"),
           p("Do the boys rate the restaurants they chose higher than others? Here's the breakdown of how much higher (or lower) each diner rates their own pick on average:"),
           tags$ul(
-            lapply(self_ratings$Person, function(diner) {
-              self_score <- self_ratings$AvgSelfScore[self_ratings$Person == diner]
-              others_score <- mean(rv$scores$Overall[rv$scores$Person == diner & rv$scores$Restaurant != rv$restaurants$Name[rv$restaurants$ChosenBy == diner]], na.rm = TRUE)
-              bias <- self_score - others_score
-              tags$li(paste0(diner, ": ", ifelse(bias > 0, "+", ""), round(bias, 2), " points higher for their own choice."))
+            lapply(1:nrow(self_ratings), function(i) {
+              diner <- self_ratings$Person[i]
+              bias <- self_ratings$Bias[i]
+              tags$li(paste0(diner, ": ", ifelse(bias > 0, "+", ""), round(bias, 2), " points difference for their own choice."))
             })
           )
       ),
       div(class = "commentary-section",
+          h4("Highs and Lows"),
+          tags$ul(
+            tags$li(strong("Best Food Score: "), highest_food$Food[1], " awarded by ", paste(highest_food$Person, collapse=", "), " for ", highest_food$Restaurant[1], "."),
+            tags$li(strong("Lowest Food Score: "), lowest_food$Food[1], " awarded by ", paste(lowest_food$Person, collapse=", "), " for ", lowest_food$Restaurant[1], "."),
+            tags$li(strong("Best Value Score: "), highest_value$Value[1], " awarded by ", paste(highest_value$Person, collapse=", "), " for ", highest_value$Restaurant[1], "."),
+            tags$li(strong("Lowest Value Score: "), lowest_value$Value[1], " awarded by ", paste(lowest_value$Person, collapse=", "), " for ", lowest_value$Restaurant[1], "."),
+            tags$li(strong("Best Experience Score: "), highest_exp$Experience[1], " awarded by ", paste(highest_exp$Person, collapse=", "), " for ", highest_exp$Restaurant[1], ".")
+          )
+      ),
+      div(class = "commentary-section",
           h4("Points of Contention"),
-          p("The most debated restaurant so far, with the biggest disagreement in 'Overall' scores, has been ", strong(contentious_restaurant$Restaurant), ".")
+          p("The most debated restaurant so far, with the biggest disagreement in 'Overall' scores, has been ", strong(contentious_restaurant$Restaurant), " (Standard Deviation: ", round(contentious_restaurant$SD_Overall, 2), ").")
       )
     )
   })
