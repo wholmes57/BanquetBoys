@@ -64,16 +64,22 @@ shinyServer(function(input, output, session) {
       legend.title = element_blank()
     )
   
-  # --- New Tab: Commentary ---
-  output$commentary_output <- renderUI({
-    req(nrow(rv$scores) > 0, nrow(rv$restaurants) > 0)
-    
-    # --- Analysis for Commentary ---
-    
+  # --- Commentary Tab Logic (Rebuilt) ---
+  output$raters_commentary <- renderUI({
+    req(nrow(rv$scores) > 0)
     generous_food <- rv$scores %>% group_by(Person) %>% summarise(Avg = mean(Food, na.rm = TRUE)) %>% filter(Avg == max(Avg))
     generous_value <- rv$scores %>% group_by(Person) %>% summarise(Avg = mean(Value, na.rm = TRUE)) %>% filter(Avg == max(Avg))
     generous_exp <- rv$scores %>% group_by(Person) %>% summarise(Avg = mean(Experience, na.rm = TRUE)) %>% filter(Avg == max(Avg))
     
+    tags$ul(
+      tags$li(strong("The Foodie: "), paste(generous_food$Person, collapse = ", "), " gives the highest average scores for Food (", round(generous_food$Avg[1], 2), ")."),
+      tags$li(strong("The Bargain Hunter: "), paste(generous_value$Person, collapse = ", "), " is the most generous when it comes to Value (", round(generous_value$Avg[1], 2), ")."),
+      tags$li(strong("The Experience Seeker: "), paste(generous_exp$Person, collapse = ", "), " has the highest average for Experience (", round(generous_exp$Avg[1], 2), ").")
+    )
+  })
+  
+  output$money_commentary <- renderUI({
+    req(nrow(rv$scores) > 0)
     price_effect <- full_data_reactive() %>%
       group_by(PriceCategory) %>%
       summarise(
@@ -82,6 +88,18 @@ shinyServer(function(input, output, session) {
       ) %>%
       arrange(desc(AvgOverall))
     
+    tagList(
+      p("The data shows a clear correlation between price and quality. The average scores and cost for each price category are:"),
+      tags$ul(
+        lapply(1:nrow(price_effect), function(i) {
+          tags$li(paste0(strong(price_effect$PriceCategory[i]), ": Avg. Score of ", round(price_effect$AvgOverall[i], 2), " (Avg. Cost: £", round(price_effect$AvgCost[i], 2), ")"))
+        })
+      )
+    )
+  })
+  
+  output$bias_commentary <- renderUI({
+    req(nrow(rv$scores) > 0)
     self_ratings <- full_data_reactive() %>%
       mutate(is_own_choice = (Person == ChosenBy)) %>%
       group_by(Person) %>%
@@ -91,6 +109,43 @@ shinyServer(function(input, output, session) {
       ) %>%
       mutate(Bias = AvgSelfScore - AvgOthersScore)
     
+    tagList(
+      p("Do the boys rate the restaurants they chose higher than others? Here's the breakdown of how much higher (or lower) each diner rates their own pick on average:"),
+      tags$ul(
+        lapply(1:nrow(self_ratings), function(i) {
+          diner <- self_ratings$Person[i]
+          bias <- self_ratings$Bias[i]
+          
+          if (is.na(bias) || is.nan(bias)) {
+            text <- paste0(diner, ": Not enough data to calculate bias.")
+          } else {
+            text <- paste0(diner, ": ", ifelse(bias >= 0, "+", ""), round(bias, 2), " points difference for their own choice.")
+          }
+          tags$li(text)
+        })
+      )
+    )
+  })
+  
+  output$highs_lows_commentary <- renderUI({
+    req(nrow(rv$scores) > 0)
+    highest_food <- rv$scores %>% filter(Food == max(Food, na.rm = TRUE))
+    lowest_food <- rv$scores %>% filter(Food == min(Food, na.rm = TRUE))
+    highest_value <- rv$scores %>% filter(Value == max(Value, na.rm = TRUE))
+    lowest_value <- rv$scores %>% filter(Value == min(Value, na.rm = TRUE))
+    highest_exp <- rv$scores %>% filter(Experience == max(Experience, na.rm = TRUE))
+    
+    tags$ul(
+      tags$li(HTML(paste0("<strong>Best Food Score:</strong> ", highest_food$Food[1], " awarded by ", paste(highest_food$Person, collapse=", "), " for ", paste(unique(highest_food$Restaurant), collapse=", "), "."))),
+      tags$li(HTML(paste0("<strong>Lowest Food Score:</strong> ", lowest_food$Food[1], " awarded by ", paste(lowest_food$Person, collapse=", "), " for ", paste(unique(lowest_food$Restaurant), collapse=", "), "."))),
+      tags$li(HTML(paste0("<strong>Best Value Score:</strong> ", highest_value$Value[1], " awarded by ", paste(highest_value$Person, collapse=", "), " for ", paste(unique(highest_value$Restaurant), collapse=", "), "."))),
+      tags$li(HTML(paste0("<strong>Lowest Value Score:</strong> ", lowest_value$Value[1], " awarded by ", paste(lowest_value$Person, collapse=", "), " for ", paste(unique(lowest_value$Restaurant), collapse=", "), "."))),
+      tags$li(HTML(paste0("<strong>Best Experience Score:</strong> ", highest_exp$Experience[1], " awarded by ", paste(highest_exp$Person, collapse=", "), " for ", paste(unique(highest_exp$Restaurant), collapse=", "), ".")))
+    )
+  })
+  
+  output$contention_commentary <- renderUI({
+    req(nrow(rv$scores) > 0)
     contentious_restaurant <- rv$scores %>%
       group_by(Restaurant) %>%
       summarise(SD_Overall = sd(Overall, na.rm = TRUE), .groups = 'drop') %>%
@@ -99,71 +154,10 @@ shinyServer(function(input, output, session) {
     if(nrow(contentious_restaurant) > 0) {
       contentious_restaurant <- contentious_restaurant %>%
         filter(SD_Overall == max(SD_Overall, na.rm = TRUE))
+      p("The most debated restaurant so far, with the biggest disagreement in 'Overall' scores, has been ", strong(paste(contentious_restaurant$Restaurant, collapse=" & ")), " (Standard Deviation: ", round(contentious_restaurant$SD_Overall[1], 2), ").")
+    } else {
+      p("There hasn't been significant disagreement on any restaurant so far.")
     }
-    
-    highest_food <- rv$scores %>% filter(Food == max(Food, na.rm = TRUE))
-    lowest_food <- rv$scores %>% filter(Food == min(Food, na.rm = TRUE))
-    highest_value <- rv$scores %>% filter(Value == max(Value, na.rm = TRUE))
-    lowest_value <- rv$scores %>% filter(Value == min(Value, na.rm = TRUE))
-    highest_exp <- rv$scores %>% filter(Experience == max(Experience, na.rm = TRUE))
-    lowest_exp <- rv$scores %>% filter(Experience == min(Experience, na.rm = TRUE))
-    
-    # --- Build the UI ---
-    tagList(
-      div(class = "commentary-section",
-          h4("The Raters: A Deeper Dive"),
-          tags$ul(
-            tags$li(strong("The Foodie: "), paste(generous_food$Person, collapse = ", "), " gives the highest average scores for Food (", round(generous_food$Avg, 2), ")."),
-            tags$li(strong("The Bargain Hunter: "), paste(generous_value$Person, collapse = ", "), " is the most generous when it comes to Value (", round(generous_value$Avg, 2), ")."),
-            tags$li(strong("The Experience Seeker: "), paste(generous_exp$Person, collapse = ", "), " has the highest average for Experience (", round(generous_exp$Avg, 2), ").")
-          )
-      ),
-      div(class = "commentary-section",
-          h4("Does Money Buy Happiness?"),
-          p("The data shows a clear correlation between price and quality. The average scores and cost for each price category are:"),
-          tags$ul(
-            lapply(1:nrow(price_effect), function(i) {
-              tags$li(paste0(strong(price_effect$PriceCategory[i]), ": Avg. Score of ", round(price_effect$AvgOverall[i], 2), " (Avg. Cost: £", round(price_effect$AvgCost[i], 2), ")"))
-            })
-          )
-      ),
-      div(class = "commentary-section",
-          h4("The Chooser's Bias"),
-          p("Do the boys rate the restaurants they chose higher than others? Here's the breakdown of how much higher (or lower) each diner rates their own pick on average:"),
-          tags$ul(
-            lapply(1:nrow(self_ratings), function(i) {
-              diner <- self_ratings$Person[i]
-              bias <- self_ratings$Bias[i]
-              
-              if (is.na(bias) || is.nan(bias)) {
-                text <- paste0(diner, ": Not enough data to calculate bias.")
-              } else {
-                text <- paste0(diner, ": ", ifelse(bias >= 0, "+", ""), round(bias, 2), " points difference for their own choice.")
-              }
-              tags$li(text)
-            })
-          )
-      ),
-      div(class = "commentary-section",
-          h4("Highs and Lows"),
-          tags$ul(
-            # Corrected logic to build the string safely before creating the tag
-            tags$li(HTML(paste0("<strong>Best Food Score:</strong> ", highest_food$Food[1], " awarded by ", paste(highest_food$Person, collapse=", "), " for ", paste(unique(highest_food$Restaurant), collapse=", "), "."))),
-            tags$li(HTML(paste0("<strong>Lowest Food Score:</strong> ", lowest_food$Food[1], " awarded by ", paste(lowest_food$Person, collapse=", "), " for ", paste(unique(lowest_food$Restaurant), collapse=", "), "."))),
-            tags$li(HTML(paste0("<strong>Best Value Score:</strong> ", highest_value$Value[1], " awarded by ", paste(highest_value$Person, collapse=", "), " for ", paste(unique(highest_value$Restaurant), collapse=", "), "."))),
-            tags$li(HTML(paste0("<strong>Lowest Value Score:</strong> ", lowest_value$Value[1], " awarded by ", paste(lowest_value$Person, collapse=", "), " for ", paste(unique(lowest_value$Restaurant), collapse=", "), "."))),
-            tags$li(HTML(paste0("<strong>Best Experience Score:</strong> ", highest_exp$Experience[1], " awarded by ", paste(highest_exp$Person, collapse=", "), " for ", paste(unique(highest_exp$Restaurant), collapse=", "), ".")))
-          )
-      ),
-      div(class = "commentary-section",
-          h4("Points of Contention"),
-          if(nrow(contentious_restaurant) > 0) {
-            p("The most debated restaurant so far, with the biggest disagreement in 'Overall' scores, has been ", strong(paste(contentious_restaurant$Restaurant, collapse=" & ")), " (Standard Deviation: ", round(contentious_restaurant$SD_Overall[1], 2), ").")
-          } else {
-            p("There hasn't been significant disagreement on any restaurant so far.")
-          }
-      )
-    )
   })
   
   # --- Tab 1: Manage Restaurants ---

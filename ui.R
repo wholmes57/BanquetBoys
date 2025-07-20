@@ -57,11 +57,31 @@ shinyUI(navbarPage(
            )
   ),
   
-  # New Tab: Commentary
+  # Tab 2: Commentary
   tabPanel("Commentary",
            fluidPage(
              h2("The Story So Far: A Statistical Overview"),
-             uiOutput("commentary_output") # Dynamic content will be rendered here
+             # Rebuilt with individual UI outputs for each section
+             div(class = "commentary-section",
+                 h4("The Raters: A Deeper Dive"),
+                 uiOutput("raters_commentary")
+             ),
+             div(class = "commentary-section",
+                 h4("Does Money Buy Happiness?"),
+                 uiOutput("money_commentary")
+             ),
+             div(class = "commentary-section",
+                 h4("The Chooser's Bias"),
+                 uiOutput("bias_commentary")
+             ),
+             div(class = "commentary-section",
+                 h4("Highs and Lows"),
+                 uiOutput("highs_lows_commentary")
+             ),
+             div(class = "commentary-section",
+                 h4("Points of Contention"),
+                 uiOutput("contention_commentary")
+             )
            )
   ),
   
