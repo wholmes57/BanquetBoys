@@ -94,11 +94,16 @@ shinyServer(function(input, output, session) {
       ) %>%
       mutate(Bias = AvgSelfScore - AvgOthersScore)
     
-    # Most contentious restaurant
+    # Most contentious restaurant (Corrected Logic)
     contentious_restaurant <- rv$scores %>%
       group_by(Restaurant) %>%
-      summarise(SD_Overall = sd(Overall, na.rm = TRUE)) %>%
-      filter(SD_Overall == max(SD_Overall, na.rm = TRUE))
+      summarise(SD_Overall = sd(Overall, na.rm = TRUE), .groups = 'drop') %>%
+      filter(!is.na(SD_Overall))
+    
+    if(nrow(contentious_restaurant) > 0) {
+      contentious_restaurant <- contentious_restaurant %>%
+        filter(SD_Overall == max(SD_Overall, na.rm = TRUE))
+    }
     
     # Highest and lowest scores
     highest_food <- rv$scores %>% filter(Food == max(Food, na.rm = TRUE))
@@ -156,7 +161,11 @@ shinyServer(function(input, output, session) {
       ),
       div(class = "commentary-section",
           h4("Points of Contention"),
-          p("The most debated restaurant so far, with the biggest disagreement in 'Overall' scores, has been ", strong(paste(contentious_restaurant$Restaurant, collapse=" & ")), " (Standard Deviation: ", round(contentious_restaurant$SD_Overall[1], 2), ").")
+          if(nrow(contentious_restaurant) > 0) {
+            p("The most debated restaurant so far, with the biggest disagreement in 'Overall' scores, has been ", strong(paste(contentious_restaurant$Restaurant, collapse=" & ")), " (Standard Deviation: ", round(contentious_restaurant$SD_Overall[1], 2), ").")
+          } else {
+            p("There hasn't been significant disagreement on any restaurant so far.")
+          }
       )
     )
   })
