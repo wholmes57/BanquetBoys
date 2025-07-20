@@ -11,6 +11,7 @@ library(googlesheets4)
 library(googledrive)
 library(leaflet)      # For the map
 library(tidygeocoder) # For converting addresses to coordinates
+library(stringr)      # For wrapping text
 
 # --- Google Sheets Authentication and Setup ---
 if (Sys.getenv("GOOGLE_APPLICATION_CREDENTIALS") != "") {
@@ -275,7 +276,7 @@ shinyServer(function(input, output, session) {
       geom_col() +
       geom_text(aes(label = round(AveragePerformance, 2)), hjust = 1.2, color = "white", fontface = "bold") +
       coord_flip() +
-      labs(title = paste("Average", selected_category, "Score of Chosen Restaurants"), x = "", y = "Average Score") +
+      labs(title = str_wrap(paste("Avg.", selected_category, "Score of Chosen Restaurants"), 40), x = "", y = "Average Score") +
       professional_theme +
       theme(legend.position = "none") +
       scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, 2)) +
@@ -306,7 +307,7 @@ shinyServer(function(input, output, session) {
       geom_col() +
       geom_text(aes(label = round(AverageScore, 2)), hjust = -0.2, color = "black", fontface = "bold") +
       coord_flip() +
-      labs(title = paste(selected_price_cat, "Performance"), x = "", y = paste("Average", selected_score_cat, "Score")) +
+      labs(title = str_wrap(paste(selected_price_cat, "Performance"), 40), x = "", y = paste("Average", selected_score_cat, "Score")) +
       professional_theme +
       theme(legend.position = "none") +
       scale_y_continuous(limits = c(0, 11), breaks = seq(0, 10, 2)) +
@@ -325,7 +326,7 @@ shinyServer(function(input, output, session) {
     
     ggplot(winners_data, aes(x = Category, y = AverageScore, fill = Restaurant)) +
       geom_col() +
-      geom_text(aes(label = paste(Restaurant, "\n", AverageScore)), vjust = 1.2, color = "white", size = 4, fontface = "bold", lineheight = .8) +
+      geom_text(aes(label = str_wrap(paste(Restaurant, "\n", AverageScore), 15)), vjust = 1.2, color = "white", size = 4, fontface = "bold", lineheight = .8) +
       labs(title = "Top Restaurant by Category", x = "Category", y = "Highest Average Score") +
       professional_theme + 
       theme(legend.position = "none") +
@@ -363,7 +364,7 @@ shinyServer(function(input, output, session) {
     ggplot(plot_data, aes(x = Person, y = Score, fill = Category)) +
       geom_col(position = "dodge") +
       geom_text(aes(label = Score), color = "white", fontface = "bold", position = position_dodge(width = 0.9), vjust = 1.5, size = 3.5) +
-      labs(title = paste("Scores for", input$analysis_restaurant), x = "Diner", y = "Score") +
+      labs(title = str_wrap(paste("Scores for", input$analysis_restaurant), 40), x = "Diner", y = "Score") +
       professional_theme + 
       scale_fill_brewer(palette = "Set1") +
       scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, 1))
