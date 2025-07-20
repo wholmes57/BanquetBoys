@@ -135,7 +135,6 @@ shinyServer(function(input, output, session) {
               diner <- self_ratings$Person[i]
               bias <- self_ratings$Bias[i]
               
-              # Handle cases where bias can't be calculated
               if (is.na(bias) || is.nan(bias)) {
                 text <- paste0(diner, ": Not enough data to calculate bias.")
               } else {
@@ -148,16 +147,16 @@ shinyServer(function(input, output, session) {
       div(class = "commentary-section",
           h4("Highs and Lows"),
           tags$ul(
-            tags$li(strong("Best Food Score: "), highest_food$Food[1], " awarded by ", paste(highest_food$Person, collapse=", "), " for ", highest_food$Restaurant[1], "."),
-            tags$li(strong("Lowest Food Score: "), lowest_food$Food[1], " awarded by ", paste(lowest_food$Person, collapse=", "), " for ", lowest_food$Restaurant[1], "."),
-            tags$li(strong("Best Value Score: "), highest_value$Value[1], " awarded by ", paste(highest_value$Person, collapse=", "), " for ", highest_value$Restaurant[1], "."),
-            tags$li(strong("Lowest Value Score: "), lowest_value$Value[1], " awarded by ", paste(lowest_value$Person, collapse=", "), " for ", lowest_value$Restaurant[1], "."),
-            tags$li(strong("Best Experience Score: "), highest_exp$Experience[1], " awarded by ", paste(highest_exp$Person, collapse=", "), " for ", highest_exp$Restaurant[1], ".")
+            tags$li(strong("Best Food Score: "), highest_food$Food[1], " awarded by ", paste(highest_food$Person, collapse=", "), " for ", paste(unique(highest_food$Restaurant), collapse=", "), "."),
+            tags$li(strong("Lowest Food Score: "), lowest_food$Food[1], " awarded by ", paste(lowest_food$Person, collapse=", "), " for ", paste(unique(lowest_food$Restaurant), collapse=", "), "."),
+            tags$li(strong("Best Value Score: "), highest_value$Value[1], " awarded by ", paste(highest_value$Person, collapse=", "), " for ", paste(unique(highest_value$Restaurant), collapse=", "), "."),
+            tags$li(strong("Lowest Value Score: "), lowest_value$Value[1], " awarded by ", paste(lowest_value$Person, collapse=", "), " for ", paste(unique(lowest_value$Restaurant), collapse=", "), "."),
+            tags$li(strong("Best Experience Score: "), highest_exp$Experience[1], " awarded by ", paste(highest_exp$Person, collapse=", "), " for ", paste(unique(highest_exp$Restaurant), collapse=", "), ".")
           )
       ),
       div(class = "commentary-section",
           h4("Points of Contention"),
-          p("The most debated restaurant so far, with the biggest disagreement in 'Overall' scores, has been ", strong(contentious_restaurant$Restaurant), " (Standard Deviation: ", round(contentious_restaurant$SD_Overall, 2), ").")
+          p("The most debated restaurant so far, with the biggest disagreement in 'Overall' scores, has been ", strong(paste(contentious_restaurant$Restaurant, collapse=" & ")), " (Standard Deviation: ", round(contentious_restaurant$SD_Overall[1], 2), ").")
       )
     )
   })
