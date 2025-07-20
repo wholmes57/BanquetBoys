@@ -20,64 +20,94 @@ shinyUI(navbarPage(
         "))
   ),
   
-  # Tab 1: Manage Restaurants
-  tabPanel("Manage Restaurants",
-           fluidRow(
-             column(6,
-                    wellPanel(
-                      h3("Add a New Dining Spot"),
-                      textInput("new_restaurant_name", "Restaurant Name:", ""),
-                      textInput("new_restaurant_address", "Restaurant Address:", placeholder = "e.g., 123 Main Street, London"),
-                      dateInput("visit_date", "Date of Visit:", value = Sys.Date(), format = "dd/mm/yyyy"),
-                      numericInput("cost_per_person", "Cost Per Person (£):", value = 30, min = 0, step = 1),
-                      selectInput("chosen_by_selector", "Chosen By:",
-                                  choices = c("Will", "Phil", "Loz", "Pells")),
-                      selectInput("price_category_selector", "Price Category:",
-                                  choices = c("Cheap", "Medium", "Expensive")),
-                      actionButton("add_restaurant_btn", "Add Restaurant", class = "btn-primary", icon = icon("plus"))
-                    ),
-                    wellPanel(
-                      h3("Delete a Restaurant"),
-                      uiOutput("delete_restaurant_ui"),
-                      actionButton("delete_restaurant_btn", "Delete Restaurant", class = "btn-danger", icon = icon("trash-alt"))
-                    )
+  # Tab 1: Overall Analysis (New Landing Page)
+  tabPanel("Overall",
+           fluidPage(
+             h3("Chooser Summary"),
+             p("Which diner has chosen a restaurant in each price category?"),
+             DT::dataTableOutput("chooser_summary_table"),
+             hr(),
+             h3("Current Standings"),
+             p("What is the average score of the restaurants chosen by each diner?"),
+             selectInput("standings_category_selector", "Choose a Category to Compare:",
+                         choices = c("Overall", "Food", "Value", "Experience"),
+                         selected = "Overall"),
+             plotOutput("diner_standings_plot"),
+             hr(),
+             h3("Restaurant Performance by Price Category"),
+             fluidRow(
+               column(6,
+                      selectInput("price_plot_category_selector", "Choose a Score Category:",
+                                  choices = c("Overall", "Food", "Value", "Experience"),
+                                  selected = "Overall")
+               ),
+               column(6,
+                      selectInput("price_category_filter_selector", "Choose a Price Category:",
+                                  choices = c("All Restaurants", "Cheap", "Medium", "Expensive"),
+                                  selected = "All Restaurants")
+               )
              ),
-             column(6,
-                    h4("Current Restaurant List"),
-                    DT::dataTableOutput("restaurant_list_table")
-             )
-           )),
+             plotOutput("price_category_performance_plot")
+           )
+  ),
   
-  # Tab 2: Enter & Manage Scores
-  tabPanel("Enter & Manage Scores",
-           sidebarLayout(
-             sidebarPanel(
-               h3("Submit Your Ratings"),
-               selectInput("person_selector", "Select Your Name:", 
-                           choices = c("Will", "Phil", "Loz", "Pells")),
-               uiOutput("restaurant_selector_ui"),
-               sliderInput("food_score", "Food Score (1-10):", min = 1, max = 10, value = 5, step = 0.1),
-               sliderInput("value_score", "Value Score (1-10):", min = 1, max = 10, value = 5, step = 0.1),
-               sliderInput("experience_score", "Experience Score (1-10):", min = 1, max = 10, value = 5, step = 0.1),
-               actionButton("submit_score_btn", "Submit/Update Scores", class = "btn-success", icon = icon("check")),
-               hr(),
-               h3("Delete a Score Entry"),
-               uiOutput("delete_score_ui"),
-               actionButton("delete_score_btn", "Delete Selected Score", class = "btn-warning", icon = icon("times"))
-             ),
-             mainPanel(
-               h4("All Submitted Scores"),
-               DT::dataTableOutput("scores_table")
-             )
-           )),
+  # Tab 2: Data Entry (New Grouped Tab)
+  navbarMenu("Data Entry",
+             tabPanel("Manage Restaurants",
+                      fluidRow(
+                        column(6,
+                               wellPanel(
+                                 h3("Add a New Dining Spot"),
+                                 textInput("new_restaurant_name", "Restaurant Name:", ""),
+                                 textInput("new_restaurant_address", "Restaurant Address:", placeholder = "e.g., 123 Main Street, London"),
+                                 dateInput("visit_date", "Date of Visit:", value = Sys.Date(), format = "dd/mm/yyyy"),
+                                 numericInput("cost_per_person", "Cost Per Person (£):", value = 30, min = 0, step = 1),
+                                 selectInput("chosen_by_selector", "Chosen By:",
+                                             choices = c("Will", "Phil", "Loz", "Pells")),
+                                 selectInput("price_category_selector", "Price Category:",
+                                             choices = c("Cheap", "Medium", "Expensive")),
+                                 actionButton("add_restaurant_btn", "Add Restaurant", class = "btn-primary", icon = icon("plus"))
+                               ),
+                               wellPanel(
+                                 h3("Delete a Restaurant"),
+                                 uiOutput("delete_restaurant_ui"),
+                                 actionButton("delete_restaurant_btn", "Delete Restaurant", class = "btn-danger", icon = icon("trash-alt"))
+                               )
+                        ),
+                        column(6,
+                               h4("Current Restaurant List"),
+                               DT::dataTableOutput("restaurant_list_table")
+                        )
+                      )),
+             
+             tabPanel("Enter & Manage Scores",
+                      sidebarLayout(
+                        sidebarPanel(
+                          h3("Submit Your Ratings"),
+                          selectInput("person_selector", "Select Your Name:", 
+                                      choices = c("Will", "Phil", "Loz", "Pells")),
+                          uiOutput("restaurant_selector_ui"),
+                          sliderInput("food_score", "Food Score (1-10):", min = 1, max = 10, value = 5, step = 0.1),
+                          sliderInput("value_score", "Value Score (1-10):", min = 1, max = 10, value = 5, step = 0.1),
+                          sliderInput("experience_score", "Experience Score (1-10):", min = 1, max = 10, value = 5, step = 0.1),
+                          actionButton("submit_score_btn", "Submit/Update Scores", class = "btn-success", icon = icon("check")),
+                          hr(),
+                          h3("Delete a Score Entry"),
+                          uiOutput("delete_score_ui"),
+                          actionButton("delete_score_btn", "Delete Selected Score", class = "btn-warning", icon = icon("times"))
+                        ),
+                        mainPanel(
+                          h4("All Submitted Scores"),
+                          DT::dataTableOutput("scores_table")
+                        )
+                      ))
+  ),
   
-  # New Tab: Map
+  # Tab 3: Map
   tabPanel("Map",
-           # Reverted to a standard fluidPage layout to fix scrolling
            fluidPage(
              fluidRow(
                column(12,
-                      # Set a large, fixed pixel height for the map
                       leafletOutput("restaurant_map", height = "800px") 
                )
              )
@@ -86,37 +116,6 @@ shinyUI(navbarPage(
   
   # Tab 4: Analysis Section
   navbarMenu("Analysis",
-             # Sub-tab 1: Overall Analysis
-             tabPanel("Overall",
-                      fluidPage(
-                        h3("Chooser Summary"),
-                        p("Which diner has chosen a restaurant in each price category?"),
-                        DT::dataTableOutput("chooser_summary_table"),
-                        hr(),
-                        h3("Current Standings"),
-                        p("What is the average score of the restaurants chosen by each diner?"),
-                        selectInput("standings_category_selector", "Choose a Category to Compare:",
-                                    choices = c("Overall", "Food", "Value", "Experience"),
-                                    selected = "Overall"),
-                        plotOutput("diner_standings_plot"),
-                        hr(),
-                        h3("Restaurant Performance by Price Category"),
-                        fluidRow(
-                          column(6,
-                                 selectInput("price_plot_category_selector", "Choose a Score Category:",
-                                             choices = c("Overall", "Food", "Value", "Experience"),
-                                             selected = "Overall")
-                          ),
-                          column(6,
-                                 selectInput("price_category_filter_selector", "Choose a Price Category:",
-                                             choices = c("All Restaurants", "Cheap", "Medium", "Expensive"),
-                                             selected = "All Restaurants")
-                          )
-                        ),
-                        plotOutput("price_category_performance_plot")
-                      )
-             ),
-             # Sub-tab 2: By Restaurant Analysis
              tabPanel("By Restaurant",
                       fluidPage(
                         h3("Category Winners"),
@@ -137,7 +136,6 @@ shinyUI(navbarPage(
                         )
                       )
              ),
-             # Sub-tab 3: By Person Analysis
              tabPanel("By Person",
                       fluidPage(
                         h3("Average Scoring Tendencies"),
@@ -159,7 +157,6 @@ shinyUI(navbarPage(
                         )
                       )
              ),
-             # Sub-tab 4: Raw Data
              tabPanel("Raw Data",
                       fluidPage(
                         h3("Full Data Table"),
