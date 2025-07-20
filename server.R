@@ -276,7 +276,7 @@ shinyServer(function(input, output, session) {
       geom_col() +
       geom_text(aes(label = round(AveragePerformance, 2)), hjust = 1.2, color = "white", fontface = "bold") +
       coord_flip() +
-      labs(title = str_wrap(paste("Avg.", selected_category, "Score of Chosen Restaurants"), 40), x = "", y = "Average Score") +
+      labs(title = str_wrap(paste("Avg.", selected_category, "Score of Chosen Restaurants"), 30), x = "", y = "Average Score") +
       professional_theme +
       theme(legend.position = "none") +
       scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, 2)) +
@@ -307,7 +307,7 @@ shinyServer(function(input, output, session) {
       geom_col() +
       geom_text(aes(label = round(AverageScore, 2)), hjust = -0.2, color = "black", fontface = "bold") +
       coord_flip() +
-      labs(title = str_wrap(paste(selected_price_cat, "Performance"), 40), x = "", y = paste("Average", selected_score_cat, "Score")) +
+      labs(title = str_wrap(paste(selected_price_cat, "Performance"), 30), x = "", y = paste("Average", selected_score_cat, "Score")) +
       professional_theme +
       theme(legend.position = "none") +
       scale_y_continuous(limits = c(0, 11), breaks = seq(0, 10, 2)) +
@@ -364,7 +364,7 @@ shinyServer(function(input, output, session) {
     ggplot(plot_data, aes(x = Person, y = Score, fill = Category)) +
       geom_col(position = "dodge") +
       geom_text(aes(label = Score), color = "white", fontface = "bold", position = position_dodge(width = 0.9), vjust = 1.5, size = 3.5) +
-      labs(title = str_wrap(paste("Scores for", input$analysis_restaurant), 40), x = "Diner", y = "Score") +
+      labs(title = str_wrap(paste("Scores for", input$analysis_restaurant), 30), x = "Diner", y = "Score") +
       professional_theme + 
       scale_fill_brewer(palette = "Set1") +
       scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, 1))
@@ -390,7 +390,7 @@ shinyServer(function(input, output, session) {
     ggplot(plot_data, aes(x = Person, y = AverageScore, fill = Category)) +
       geom_col(position = "dodge") +
       geom_text(aes(label = round(AverageScore, 1)), color = "white", fontface = "bold", position = position_dodge(width = 0.9), vjust = 1.5, size = 3.5) +
-      labs(title = "Average Rating Tendencies (Bar Chart)", x = "Person", y = "Average Score Given") +
+      labs(title = str_wrap("Average Rating Tendencies (Bar Chart)", 30), x = "Person", y = "Average Score Given") +
       professional_theme + 
       scale_fill_brewer(palette = "Set1") +
       scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, 1))
@@ -429,7 +429,7 @@ shinyServer(function(input, output, session) {
       group.point.size = 3,
       group.colours = brewer.pal(4, "Set1"),
       legend.title = "Diner",
-      plot.title = "Average Rating Tendencies (Radar Chart)"
+      plot.title = str_wrap("Average Rating Tendencies (Radar Chart)", 30)
     )
   })
   
