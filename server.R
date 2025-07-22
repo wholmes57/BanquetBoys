@@ -441,9 +441,9 @@ shinyServer(function(input, output, session) {
       mutate(Category = factor(Category, levels = c("Food", "Value", "Experience", "Overall")))
     
     ggplot(winners_data, aes(x = Category, y = AverageScore, fill = Restaurant)) +
-      geom_col() +
-      geom_text(aes(label = AverageScore), vjust = 1.5, color = "white", size = 4, fontface = "bold") +
-      geom_text(aes(label = str_wrap(Restaurant, 15)), vjust = -0.5, color = "black", size = 4, fontface = "bold") +
+      geom_col(position = "dodge") +
+      geom_text(aes(label = AverageScore), vjust = 1.5, color = "white", size = 4, fontface = "bold", position = position_dodge(width = 0.9)) +
+      geom_text(aes(label = str_wrap(Restaurant, 15)), vjust = -0.5, color = "black", size = 4, fontface = "bold", position = position_dodge(width = 0.9)) +
       labs(title = "Top Restaurant by Category", x = "Category", y = "Highest Average Score") +
       professional_theme + 
       theme(legend.position = "none") +
@@ -461,9 +461,9 @@ shinyServer(function(input, output, session) {
       mutate(Category = factor(Category, levels = c("Food", "Value", "Experience", "Overall")))
     
     ggplot(losers_data, aes(x = Category, y = AverageScore, fill = Restaurant)) +
-      geom_col() +
-      geom_text(aes(label = AverageScore), vjust = 1.5, color = "white", size = 4, fontface = "bold") +
-      geom_text(aes(label = str_wrap(Restaurant, 15)), vjust = -0.5, color = "black", size = 4, fontface = "bold") +
+      geom_col(position = "dodge") +
+      geom_text(aes(label = AverageScore), vjust = 1.5, color = "white", size = 4, fontface = "bold", position = position_dodge(width = 0.9)) +
+      geom_text(aes(label = str_wrap(Restaurant, 15)), vjust = -0.5, color = "black", size = 4, fontface = "bold", position = position_dodge(width = 0.9)) +
       labs(title = "Lowest Rated by Category", x = "Category", y = "Lowest Average Score") +
       professional_theme + 
       theme(legend.position = "none") +
