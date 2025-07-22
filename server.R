@@ -92,7 +92,7 @@ shinyServer(function(input, output, session) {
       p("The data shows a clear correlation between price and quality. The average scores and cost for each price category are:"),
       tags$ul(
         lapply(1:nrow(price_effect), function(i) {
-          tags$li(paste0(strong(price_effect$PriceCategory[i]), ": Avg. Score of ", round(price_effect$AvgOverall[i], 2), " (Avg. Cost: £", round(price_effect$AvgCost[i], 2), ")"))
+          tags$li(HTML(paste0("<strong>", price_effect$PriceCategory[i], "</strong>: Avg. Score of ", round(price_effect$AvgOverall[i], 2), " (Avg. Cost: £", round(price_effect$AvgCost[i], 2), ")")))
         })
       )
     )
@@ -134,13 +134,19 @@ shinyServer(function(input, output, session) {
     highest_value <- rv$scores %>% filter(Value == max(Value, na.rm = TRUE))
     lowest_value <- rv$scores %>% filter(Value == min(Value, na.rm = TRUE))
     highest_exp <- rv$scores %>% filter(Experience == max(Experience, na.rm = TRUE))
+    lowest_exp <- rv$scores %>% filter(Experience == min(Experience, na.rm = TRUE))
+    highest_overall <- rv$scores %>% filter(Overall == max(Overall, na.rm = TRUE))
+    lowest_overall <- rv$scores %>% filter(Overall == min(Overall, na.rm = TRUE))
     
     tags$ul(
       tags$li(HTML(paste0("<strong>Best Food Score:</strong> ", highest_food$Food[1], " awarded by ", paste(highest_food$Person, collapse=", "), " for ", paste(unique(highest_food$Restaurant), collapse=", "), "."))),
       tags$li(HTML(paste0("<strong>Lowest Food Score:</strong> ", lowest_food$Food[1], " awarded by ", paste(lowest_food$Person, collapse=", "), " for ", paste(unique(lowest_food$Restaurant), collapse=", "), "."))),
       tags$li(HTML(paste0("<strong>Best Value Score:</strong> ", highest_value$Value[1], " awarded by ", paste(highest_value$Person, collapse=", "), " for ", paste(unique(highest_value$Restaurant), collapse=", "), "."))),
       tags$li(HTML(paste0("<strong>Lowest Value Score:</strong> ", lowest_value$Value[1], " awarded by ", paste(lowest_value$Person, collapse=", "), " for ", paste(unique(lowest_value$Restaurant), collapse=", "), "."))),
-      tags$li(HTML(paste0("<strong>Best Experience Score:</strong> ", highest_exp$Experience[1], " awarded by ", paste(highest_exp$Person, collapse=", "), " for ", paste(unique(highest_exp$Restaurant), collapse=", "), ".")))
+      tags$li(HTML(paste0("<strong>Best Experience Score:</strong> ", highest_exp$Experience[1], " awarded by ", paste(highest_exp$Person, collapse=", "), " for ", paste(unique(highest_exp$Restaurant), collapse=", "), "."))),
+      tags$li(HTML(paste0("<strong>Lowest Experience Score:</strong> ", lowest_exp$Experience[1], " awarded by ", paste(lowest_exp$Person, collapse=", "), " for ", paste(unique(lowest_exp$Restaurant), collapse=", "), "."))),
+      tags$li(HTML(paste0("<strong>Best Overall Score:</strong> ", highest_overall$Overall[1], " awarded by ", paste(highest_overall$Person, collapse=", "), " for ", paste(unique(highest_overall$Restaurant), collapse=", "), "."))),
+      tags$li(HTML(paste0("<strong>Lowest Overall Score:</strong> ", lowest_overall$Overall[1], " awarded by ", paste(lowest_overall$Person, collapse=", "), " for ", paste(unique(lowest_overall$Restaurant), collapse=", "), ".")))
     )
   })
   

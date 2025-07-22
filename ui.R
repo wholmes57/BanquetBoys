@@ -31,7 +31,8 @@ shinyUI(navbarPage(
            fluidPage(
              h3("Chooser Summary"),
              p("Which diner has chosen a restaurant in each price category?"),
-             DT::dataTableOutput("chooser_summary_table"),
+             # Reverted to tableOutput for stability
+             tableOutput("chooser_summary_table"),
              hr(),
              h3("Current Standings"),
              p("What is the average score of the restaurants chosen by each diner?"),
