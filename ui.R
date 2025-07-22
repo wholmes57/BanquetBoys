@@ -31,7 +31,7 @@ shinyUI(navbarPage(
            fluidPage(
              h3("Chooser Summary"),
              p("Which diner has chosen a restaurant in each price category?"),
-             # Switched to DT::dataTableOutput for consistent rendering
+             # Reverted to DT::dataTableOutput for consistency
              DT::dataTableOutput("chooser_summary_table"),
              hr(),
              h3("Current Standings"),

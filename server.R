@@ -351,7 +351,7 @@ shinyServer(function(input, output, session) {
   
   # --- Analysis: Overall ---
   
-  output$chooser_summary_table <- renderTable({
+  output$chooser_summary_table <- DT::renderDataTable({
     req(nrow(rv$restaurants) > 0)
     
     diners <- c("Will", "Phil", "Loz", "Pells")
@@ -374,8 +374,17 @@ shinyServer(function(input, output, session) {
     
     names(final_table) <- c("Diner", "Cheap", "Medium", "Expensive")
     
-    return(final_table)
-  }, align = 'c', bordered = TRUE, striped = TRUE)
+    DT::datatable(
+      final_table,
+      rownames = FALSE,
+      options = list(
+        paging = FALSE, lengthChange = FALSE, searching = FALSE, 
+        info = FALSE, ordering = FALSE,
+        columnDefs = list(list(className = 'dt-center', targets = "_all"))
+      ),
+      class = 'cell-border stripe'
+    )
+  })
   
   output$diner_standings_plot <- renderPlot({
     req(nrow(rv$scores) > 0, input$standings_category_selector)
