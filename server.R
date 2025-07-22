@@ -100,26 +100,30 @@ shinyServer(function(input, output, session) {
   
   output$bias_commentary <- renderUI({
     req(nrow(rv$scores) > 0)
-    self_ratings <- full_data_reactive() %>%
-      mutate(is_own_choice = (Person == ChosenBy)) %>%
-      group_by(Person) %>%
+    
+    # New, more robust logic for chooser's bias
+    bias_data <- full_data_reactive() %>%
+      group_by(Restaurant, ChosenBy) %>%
       summarise(
-        AvgSelfScore = mean(Overall[is_own_choice], na.rm = TRUE),
-        AvgOthersScore = mean(Overall[!is_own_choice], na.rm = TRUE)
+        ChoosersScore = Overall[Person == ChosenBy[1]],
+        OthersAvgScore = mean(Overall[Person != ChosenBy[1]], na.rm = TRUE),
+        .groups = 'drop'
       ) %>%
-      mutate(Bias = AvgSelfScore - AvgOthersScore)
+      mutate(Bias = ChoosersScore - OthersAvgScore) %>%
+      group_by(ChosenBy) %>%
+      summarise(AvgBias = mean(Bias, na.rm = TRUE))
     
     tagList(
       p("Do the boys rate the restaurants they chose higher than others? Here's the breakdown of how much higher (or lower) each diner rates their own pick on average:"),
       tags$ul(
-        lapply(1:nrow(self_ratings), function(i) {
-          diner <- self_ratings$Person[i]
-          bias <- self_ratings$Bias[i]
+        lapply(1:nrow(bias_data), function(i) {
+          diner <- bias_data$ChosenBy[i]
+          bias <- bias_data$AvgBias[i]
           
           if (is.na(bias) || is.nan(bias)) {
             text <- paste0(diner, ": Not enough data to calculate bias.")
           } else {
-            text <- paste0(diner, ": ", ifelse(bias >= 0, "+", ""), round(bias, 2), " points difference for their own choice.")
+            text <- paste0(diner, ": ", ifelse(bias >= 0, "+", ""), round(bias, 2), " points difference.")
           }
           tags$li(text)
         })
@@ -152,15 +156,30 @@ shinyServer(function(input, output, session) {
   
   output$contention_commentary <- renderUI({
     req(nrow(rv$scores) > 0)
-    contentious_restaurant <- rv$scores %>%
-      group_by(Restaurant) %>%
-      summarise(SD_Overall = sd(Overall, na.rm = TRUE), .groups = 'drop') %>%
-      filter(!is.na(SD_Overall))
     
-    if(nrow(contentious_restaurant) > 0) {
-      contentious_restaurant <- contentious_restaurant %>%
-        filter(SD_Overall == max(SD_Overall, na.rm = TRUE))
-      p("The most debated restaurant so far, with the biggest disagreement in 'Overall' scores, has been ", strong(paste(contentious_restaurant$Restaurant, collapse=" & ")), " (Standard Deviation: ", round(contentious_restaurant$SD_Overall[1], 2), ").")
+    # New logic for contention based on range
+    contention_data <- rv$scores %>%
+      group_by(Restaurant) %>%
+      summarise(
+        ScoreRange = max(Overall, na.rm = TRUE) - min(Overall, na.rm = TRUE),
+        .groups = 'drop'
+      ) %>%
+      filter(!is.na(ScoreRange))
+    
+    if(nrow(contention_data) > 0) {
+      most_contentious <- contention_data %>%
+        filter(ScoreRange == max(ScoreRange, na.rm = TRUE))
+      
+      # Get individual scores for the most contentious restaurant
+      scores_for_contention <- rv$scores %>%
+        filter(Restaurant == most_contentious$Restaurant[1]) %>%
+        arrange(Person)
+      
+      scores_text <- paste(scores_for_contention$Person, ":", scores_for_contention$Overall, collapse = ", ")
+      
+      p("The most debated restaurant so far, with the biggest range in 'Overall' scores, has been ", 
+        strong(paste(most_contentious$Restaurant, collapse=" & ")), 
+        " (Range: ", round(most_contentious$ScoreRange[1], 2), "). The scores were: ", scores_text, ".")
     } else {
       p("There hasn't been significant disagreement on any restaurant so far.")
     }
@@ -323,6 +342,32 @@ shinyServer(function(input, output, session) {
   })
   
   # --- Analysis: Overall ---
+  
+  output$chooser_summary_table <- renderTable({
+    req(nrow(rv$restaurants) > 0)
+    
+    diners <- c("Will", "Phil", "Loz", "Pells")
+    categories <- c("Cheap", "Medium", "Expensive")
+    
+    complete_grid <- expand.grid(ChosenBy = diners, PriceCategory = categories, stringsAsFactors = FALSE)
+    
+    choice_summary <- rv$restaurants %>%
+      group_by(ChosenBy, PriceCategory) %>%
+      summarise(count = n(), .groups = 'drop')
+    
+    summary_data <- left_join(complete_grid, choice_summary, by = c("ChosenBy", "PriceCategory")) %>%
+      mutate(has_chosen = ifelse(!is.na(count), "✓", "")) %>%
+      select(ChosenBy, PriceCategory, has_chosen)
+    
+    final_table <- summary_data %>%
+      pivot_wider(names_from = PriceCategory, values_from = has_chosen, values_fill = "") %>%
+      mutate(ChosenBy = factor(ChosenBy, levels = diners)) %>%
+      arrange(ChosenBy)
+    
+    names(final_table) <- c("Diner", "Cheap", "Medium", "Expensive")
+    
+    return(final_table)
+  }, align = 'c', bordered = TRUE, striped = TRUE)
   
   output$diner_standings_plot <- renderPlot({
     req(nrow(rv$scores) > 0, input$standings_category_selector)
