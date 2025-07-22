@@ -101,7 +101,6 @@ shinyServer(function(input, output, session) {
   output$bias_commentary <- renderUI({
     req(nrow(rv$scores) > 0)
     
-    # New, more robust logic for chooser's bias
     bias_data <- full_data_reactive() %>%
       group_by(Restaurant) %>%
       mutate(RestaurantAvg = mean(Overall, na.rm = TRUE)) %>%

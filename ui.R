@@ -31,8 +31,11 @@ shinyUI(navbarPage(
            fluidPage(
              h3("Chooser Summary"),
              p("Which diner has chosen a restaurant in each price category?"),
-             # Reverted to DT::dataTableOutput for consistency
              DT::dataTableOutput("chooser_summary_table"),
+             hr(),
+             h3("Restaurant Timeline"),
+             p("A timeline of all restaurants visited to date."),
+             plotOutput("restaurant_timeline_plot"),
              hr(),
              h3("Current Standings"),
              p("What is the average score of the restaurants chosen by each diner?"),
