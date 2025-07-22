@@ -101,30 +101,41 @@ shinyServer(function(input, output, session) {
   output$bias_commentary <- renderUI({
     req(nrow(rv$scores) > 0)
     
+    # New, more robust logic for chooser's bias
     bias_data <- full_data_reactive() %>%
-      group_by(Restaurant, ChosenBy) %>%
+      group_by(Restaurant) %>%
+      mutate(RestaurantAvg = mean(Overall, na.rm = TRUE)) %>%
+      ungroup() %>%
+      mutate(
+        DiffToMean = Overall - RestaurantAvg,
+        is_own_choice = (Person == ChosenBy)
+      ) %>%
+      group_by(Person) %>%
       summarise(
-        ChoosersScore = Overall[Person == ChosenBy[1]],
-        OthersAvgScore = mean(Overall[Person != ChosenBy[1]], na.rm = TRUE),
+        AvgDiffOwn = mean(DiffToMean[is_own_choice], na.rm = TRUE),
+        AvgDiffOthers = mean(DiffToMean[!is_own_choice], na.rm = TRUE),
         .groups = 'drop'
       ) %>%
-      mutate(Bias = ChoosersScore - OthersAvgScore) %>%
-      group_by(ChosenBy) %>%
-      summarise(AvgBias = mean(Bias, na.rm = TRUE))
+      mutate(OverallBias = AvgDiffOwn - AvgDiffOthers)
     
     tagList(
       p("Do the boys rate the restaurants they chose higher than others? Here's the breakdown:"),
       tags$ul(
         lapply(1:nrow(bias_data), function(i) {
-          diner <- bias_data$ChosenBy[i]
-          bias <- bias_data$AvgBias[i]
+          diner <- bias_data$Person[i]
+          avg_diff_own <- bias_data$AvgDiffOwn[i]
+          avg_diff_others <- bias_data$AvgDiffOthers[i]
+          overall_bias <- bias_data$OverallBias[i]
           
-          if (is.na(bias) || is.nan(bias)) {
-            text <- paste0(diner, ": Not enough data to calculate bias.")
-          } else {
-            text <- paste0(diner, ": ", ifelse(bias >= 0, "+", ""), round(bias, 2), " points difference.")
-          }
-          tags$li(text)
+          text <- paste0(
+            strong(diner), ": on average, scores restaurants they picked ", 
+            strong(ifelse(is.na(avg_diff_own), "N/A", round(avg_diff_own, 2))), 
+            " points vs the mean, and others' picks ", 
+            strong(ifelse(is.na(avg_diff_others), "N/A", round(avg_diff_others, 2))),
+            " points vs the mean. Overall Bias: ",
+            strong(ifelse(is.na(overall_bias), "N/A", paste0(ifelse(overall_bias >= 0, "+", ""), round(overall_bias, 2))))
+          )
+          tags$li(HTML(text))
         })
       )
     )

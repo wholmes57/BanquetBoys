@@ -31,7 +31,8 @@ shinyUI(navbarPage(
            fluidPage(
              h3("Chooser Summary"),
              p("Which diner has chosen a restaurant in each price category?"),
-             tableOutput("chooser_summary_table"),
+             # Switched to DT::dataTableOutput for consistent rendering
+             DT::dataTableOutput("chooser_summary_table"),
              hr(),
              h3("Current Standings"),
              p("What is the average score of the restaurants chosen by each diner?"),
@@ -61,6 +62,7 @@ shinyUI(navbarPage(
   tabPanel("Commentary",
            fluidPage(
              h2("The Story So Far: A Statistical Overview"),
+             # Rebuilt with individual UI outputs for each section
              div(class = "commentary-section",
                  h4("The Raters: A Deeper Dive"),
                  uiOutput("raters_commentary")
