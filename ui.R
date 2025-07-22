@@ -31,7 +31,6 @@ shinyUI(navbarPage(
            fluidPage(
              h3("Chooser Summary"),
              p("Which diner has chosen a restaurant in each price category?"),
-             # Reverted to tableOutput for stability
              tableOutput("chooser_summary_table"),
              hr(),
              h3("Current Standings"),
@@ -62,7 +61,6 @@ shinyUI(navbarPage(
   tabPanel("Commentary",
            fluidPage(
              h2("The Story So Far: A Statistical Overview"),
-             # Rebuilt with individual UI outputs for each section
              div(class = "commentary-section",
                  h4("The Raters: A Deeper Dive"),
                  uiOutput("raters_commentary")
@@ -153,9 +151,12 @@ shinyUI(navbarPage(
   navbarMenu("Analysis",
              tabPanel("By Restaurant",
                       fluidPage(
-                        h3("Category Winners"),
-                        p("The restaurant with the highest average score in each category."),
-                        plotOutput("overall_winners_plot"),
+                        h3("Category Winners and Losers"),
+                        p("The restaurants with the highest and lowest average score in each category."),
+                        fluidRow(
+                          column(6, plotOutput("overall_winners_plot")),
+                          column(6, plotOutput("overall_losers_plot"))
+                        ),
                         hr(),
                         sidebarLayout(
                           sidebarPanel(
