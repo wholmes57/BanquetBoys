@@ -385,6 +385,23 @@ shinyServer(function(input, output, session) {
     )
   })
   
+  # New timeline plot
+  output$restaurant_timeline_plot <- renderPlot({
+    req(nrow(rv$restaurants) > 0)
+    
+    timeline_data <- rv$restaurants %>%
+      arrange(Date)
+    
+    ggplot(timeline_data, aes(x = Date, y = reorder(Name, Date))) +
+      geom_segment(aes(xend = Date, yend = 0), color = "gray") +
+      geom_point(aes(color = ChosenBy), size = 4) +
+      geom_text(aes(label = Name), hjust = -0.1, size = 5) +
+      labs(title = "Restaurant Visit Timeline", x = "Date", y = "") +
+      professional_theme +
+      theme(axis.text.y = element_blank(), axis.ticks.y = element_blank()) +
+      scale_color_brewer(palette = "Set1")
+  })
+  
   output$diner_standings_plot <- renderPlot({
     req(nrow(rv$scores) > 0, input$standings_category_selector)
     
