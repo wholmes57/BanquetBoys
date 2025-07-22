@@ -385,20 +385,36 @@ shinyServer(function(input, output, session) {
     )
   })
   
-  # New timeline plot
+  # Updated timeline plot
   output$restaurant_timeline_plot <- renderPlot({
     req(nrow(rv$restaurants) > 0)
     
     timeline_data <- rv$restaurants %>%
       arrange(Date)
     
-    ggplot(timeline_data, aes(x = Date, y = reorder(Name, Date))) +
-      geom_segment(aes(xend = Date, yend = 0), color = "gray") +
-      geom_point(aes(color = ChosenBy), size = 4) +
-      geom_text(aes(label = Name), hjust = -0.1, size = 5) +
+    # Define the date range for the x-axis
+    min_date <- as.Date(paste0(format(min(timeline_data$Date), "%Y-%m"), "-01"))
+    max_date_raw <- max(timeline_data$Date)
+    max_date <- seq(max_date_raw, by = "month", length.out = 2)[2]
+    
+    ggplot(timeline_data, aes(x = Date, y = 0)) +
+      geom_hline(yintercept = 0, color = "gray", size = 1) +
+      geom_point(aes(color = ChosenBy), size = 5) +
+      geom_text(aes(label = Name), angle = 90, vjust = -0.8, hjust = 0.5, size = 4, fontface = "bold") +
+      scale_x_date(
+        date_breaks = "1 month", 
+        date_labels = "%b %Y",
+        limits = c(min_date, max_date)
+      ) +
       labs(title = "Restaurant Visit Timeline", x = "Date", y = "") +
       professional_theme +
-      theme(axis.text.y = element_blank(), axis.ticks.y = element_blank()) +
+      theme(
+        axis.text.y = element_blank(), 
+        axis.ticks.y = element_blank(),
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        panel.grid.major.y = element_blank(),
+        plot.margin = unit(c(2, 1, 1, 1), "cm") # Add more top margin for labels
+      ) +
       scale_color_brewer(palette = "Set1")
   })
   
