@@ -472,46 +472,6 @@ shinyServer(function(input, output, session) {
   })
   
   # --- Analysis: By Restaurant ---
-  output$overall_winners_plot <- renderPlot({
-    req(nrow(rv$scores) > 0)
-    winners_data <- avg_scores_per_restaurant() %>%
-      pivot_longer(cols = -Restaurant, names_to = "Category", values_to = "AverageScore") %>%
-      group_by(Category) %>%
-      filter(AverageScore == max(AverageScore)) %>%
-      ungroup() %>%
-      mutate(Category = factor(Category, levels = c("Food", "Value", "Experience", "Overall")))
-    
-    ggplot(winners_data, aes(x = Category, y = AverageScore, fill = Restaurant)) +
-      geom_col(position = "dodge") +
-      geom_text(aes(label = AverageScore), vjust = 1.5, color = "white", size = 4, fontface = "bold", position = position_dodge(width = 0.9)) +
-      geom_text(aes(label = str_wrap(Restaurant, 15)), vjust = -0.5, color = "black", size = 4, fontface = "bold", position = position_dodge(width = 0.9)) +
-      labs(title = "Top Restaurant by Category", x = "Category", y = "Highest Average Score") +
-      professional_theme + 
-      theme(legend.position = "none") +
-      scale_y_continuous(limits = c(0, 11), breaks = seq(0, 10, 1)) +
-      scale_fill_brewer(palette = "Set1")
-  })
-  
-  output$overall_losers_plot <- renderPlot({
-    req(nrow(rv$scores) > 0)
-    losers_data <- avg_scores_per_restaurant() %>%
-      pivot_longer(cols = -Restaurant, names_to = "Category", values_to = "AverageScore") %>%
-      group_by(Category) %>%
-      filter(AverageScore == min(AverageScore)) %>%
-      ungroup() %>%
-      mutate(Category = factor(Category, levels = c("Food", "Value", "Experience", "Overall")))
-    
-    ggplot(losers_data, aes(x = Category, y = AverageScore, fill = Restaurant)) +
-      geom_col(position = "dodge") +
-      geom_text(aes(label = AverageScore), vjust = 1.5, color = "white", size = 4, fontface = "bold", position = position_dodge(width = 0.9)) +
-      geom_text(aes(label = str_wrap(Restaurant, 15)), vjust = -0.5, color = "black", size = 4, fontface = "bold", position = position_dodge(width = 0.9)) +
-      labs(title = "Lowest Rated by Category", x = "Category", y = "Lowest Average Score") +
-      professional_theme + 
-      theme(legend.position = "none") +
-      scale_y_continuous(limits = c(0, 11), breaks = seq(0, 10, 1)) +
-      scale_fill_brewer(palette = "Set1")
-  })
-  
   output$analysis_restaurant_selector_ui <- renderUI({
     req(nrow(rv$restaurants) > 0)
     selectInput("analysis_restaurant", "Select a Restaurant:", choices = rv$restaurants$Name)
@@ -633,6 +593,42 @@ shinyServer(function(input, output, session) {
         class = 'cell-border stripe'
       )
     })
+  })
+  
+  # --- Analysis: Sensitivity ---
+  output$sensitivity_standings_plot <- renderPlot({
+    req(nrow(rv$scores) > 0, input$sensitivity_category_selector)
+    
+    selected_category <- input$sensitivity_category_selector
+    
+    # Filter out scores where the person is the chooser
+    scores_without_bias <- full_data_reactive() %>%
+      filter(Person != ChosenBy)
+    
+    # Calculate new average scores per restaurant based on the filtered data
+    avg_scores_sensitivity <- scores_without_bias %>%
+      group_by(Restaurant) %>%
+      summarise(
+        Food = round(mean(Food, na.rm = TRUE), 2), Value = round(mean(Value, na.rm = TRUE), 2),
+        Experience = round(mean(Experience, na.rm = TRUE), 2), Overall = round(mean(Overall, na.rm = TRUE), 2),
+        .groups = 'drop'
+      )
+    
+    chooser_performance_data <- avg_scores_sensitivity %>%
+      left_join(rv$restaurants, by = c("Restaurant" = "Name")) %>%
+      group_by(ChosenBy) %>%
+      summarise(AveragePerformance = mean(.data[[selected_category]], na.rm = TRUE)) %>%
+      rename(Person = ChosenBy)
+    
+    ggplot(chooser_performance_data, aes(x = reorder(Person, AveragePerformance), y = AveragePerformance, fill = Person)) +
+      geom_col() +
+      geom_text(aes(label = round(AveragePerformance, 2)), hjust = 1.2, color = "white", fontface = "bold") +
+      coord_flip() +
+      labs(title = str_wrap(paste("BIAS-ADJUSTED Avg.", selected_category, "Score of Chosen Restaurants"), 20), x = "", y = "Average Score") +
+      professional_theme +
+      theme(legend.position = "none") +
+      scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, 2)) +
+      scale_fill_brewer(palette = "Set1")
   })
   
   # --- Analysis: Raw Data ---

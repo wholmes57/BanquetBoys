@@ -156,13 +156,6 @@ shinyUI(navbarPage(
   navbarMenu("Analysis",
              tabPanel("By Restaurant",
                       fluidPage(
-                        h3("Category Winners and Losers"),
-                        p("The restaurants with the highest and lowest average score in each category."),
-                        fluidRow(
-                          column(6, plotOutput("overall_winners_plot")),
-                          column(6, plotOutput("overall_losers_plot"))
-                        ),
-                        hr(),
                         sidebarLayout(
                           sidebarPanel(
                             uiOutput("analysis_restaurant_selector_ui")
@@ -196,6 +189,16 @@ shinyUI(navbarPage(
                           column(6, h4("Loz"), DT::dataTableOutput("loz_ranks")),
                           column(6, h4("Pells"), DT::dataTableOutput("pells_ranks"))
                         )
+                      )
+             ),
+             tabPanel("Sensitivity",
+                      fluidPage(
+                        h3("Sensitivity Analysis"),
+                        p("How do the standings change if we ignore the score from the person who chose the restaurant? This removes chooser's bias from the results."),
+                        selectInput("sensitivity_category_selector", "Choose a Category to Compare:",
+                                    choices = c("Overall", "Food", "Value", "Experience"),
+                                    selected = "Overall"),
+                        plotOutput("sensitivity_standings_plot")
                       )
              ),
              tabPanel("Raw Data",
