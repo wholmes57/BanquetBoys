@@ -194,7 +194,7 @@ shinyUI(navbarPage(
              tabPanel("Sensitivity",
                       fluidPage(
                         h3("Sensitivity Analysis"),
-                        p("How do the standings change if we ignore the score from the person who chose the restaurant? This removes chooser's bias from the results."),
+                        p("How do the standings change if we ignore the score from the person who chose the restaurant?"),
                         selectInput("sensitivity_category_selector", "Choose a Category to Compare:",
                                     choices = c("Overall", "Food", "Value", "Experience"),
                                     selected = "Overall"),
