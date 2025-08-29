@@ -523,6 +523,14 @@ shinyServer(function(input, output, session) {
     # Create a color palette function for the seasons
     season_color_pal <- colorFactor(palette = "viridis", domain = levels(map_data$Season))
     
+    # Create the icons list *before* the leaflet call
+    icons <- awesomeIcons(
+      icon = 'utensils',
+      iconColor = 'white',
+      library = 'fa',
+      markerColor = season_color_pal(map_data$Season)
+    )
+    
     map_data$popup_label <- paste(
       "<strong>", map_data$Name, "</strong><br/>",
       "Season: ", map_data$Season, "<br/>",
@@ -536,12 +544,7 @@ shinyServer(function(input, output, session) {
         lng = ~Longitude, 
         lat = ~Latitude,
         popup = ~popup_label,
-        icon = ~awesomeIcons(
-          icon = 'utensils',
-          iconColor = 'white',
-          library = 'fa',
-          markerColor = season_color_pal(Season)
-        )
+        icon = icons
       ) %>%
       addLegend(
         "bottomright",
