@@ -518,10 +518,24 @@ shinyServer(function(input, output, session) {
     map_data <- filtered_restaurants() %>%
       left_join(avg_scores_per_restaurant(), by = c("Name" = "Restaurant")) %>%
       filter(!is.na(Latitude) & !is.na(Longitude)) %>%
-      mutate(Season = as.factor(Season)) # Treat Season as a factor for coloring
+      mutate(Season = as.factor(Season))
     
-    # Create a color palette for the seasons
-    season_colors <- colorFactor(palette = "viridis", domain = map_data$Season)
+    # Define a list of colors for awesomeIcons
+    awesome_colors <- c('blue', 'green', 'orange', 'purple', 'red', 'darkblue', 'darkgreen', 'cadetblue', 'pink', 'beige')
+    unique_seasons <- unique(map_data$Season)
+    
+    # Create a named list to map seasons to colors
+    season_to_color_map <- setNames(awesome_colors[1:length(unique_seasons)], unique_seasons)
+    
+    map_data <- map_data %>%
+      mutate(pin_color = season_to_color_map[Season])
+    
+    icons <- awesomeIcons(
+      icon = 'utensils',
+      iconColor = 'white',
+      library = 'fa',
+      markerColor = map_data$pin_color
+    )
     
     map_data$popup_label <- paste(
       "<strong>", map_data$Name, "</strong><br/>",
@@ -532,18 +546,16 @@ shinyServer(function(input, output, session) {
     
     leaflet(data = map_data) %>%
       addTiles() %>%
-      addCircleMarkers(
+      addAwesomeMarkers(
         lng = ~Longitude, 
         lat = ~Latitude,
         popup = ~popup_label,
-        color = ~season_colors(Season),
-        stroke = FALSE,
-        fillOpacity = 0.8
+        icon = icons
       ) %>%
       addLegend(
         "bottomright",
-        pal = season_colors,
-        values = ~Season,
+        colors = unname(season_to_color_map),
+        labels = paste("Season", names(season_to_color_map)),
         title = "Season",
         opacity = 1
       )
@@ -828,4 +840,6 @@ shinyServer(function(input, output, session) {
     )
   })
 })
+" and nothing else.
+I have a follow-up question. The commentary page is no longer working. Please can you look into this?
 
