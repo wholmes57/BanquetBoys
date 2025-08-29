@@ -520,22 +520,8 @@ shinyServer(function(input, output, session) {
       filter(!is.na(Latitude) & !is.na(Longitude)) %>%
       mutate(Season = as.factor(Season))
     
-    # Define a list of colors for awesomeIcons
-    awesome_colors <- c('blue', 'green', 'orange', 'purple', 'red', 'darkblue', 'darkgreen', 'cadetblue', 'pink', 'beige')
-    unique_seasons <- unique(map_data$Season)
-    
-    # Create a named list to map seasons to colors
-    season_to_color_map <- setNames(awesome_colors[1:length(unique_seasons)], unique_seasons)
-    
-    map_data <- map_data %>%
-      mutate(pin_color = season_to_color_map[Season])
-    
-    icons <- awesomeIcons(
-      icon = 'utensils',
-      iconColor = 'white',
-      library = 'fa',
-      markerColor = map_data$pin_color
-    )
+    # Create a color palette function for the seasons
+    season_color_pal <- colorFactor(palette = "viridis", domain = levels(map_data$Season))
     
     map_data$popup_label <- paste(
       "<strong>", map_data$Name, "</strong><br/>",
@@ -550,12 +536,17 @@ shinyServer(function(input, output, session) {
         lng = ~Longitude, 
         lat = ~Latitude,
         popup = ~popup_label,
-        icon = icons
+        icon = ~awesomeIcons(
+          icon = 'utensils',
+          iconColor = 'white',
+          library = 'fa',
+          markerColor = season_color_pal(Season)
+        )
       ) %>%
       addLegend(
         "bottomright",
-        colors = unname(season_to_color_map),
-        labels = paste("Season", names(season_to_color_map)),
+        pal = season_color_pal,
+        values = ~Season,
         title = "Season",
         opacity = 1
       )
@@ -840,6 +831,4 @@ shinyServer(function(input, output, session) {
     )
   })
 })
-" and nothing else.
-I have a follow-up question. The commentary page is no longer working. Please can you look into this?
 
