@@ -517,20 +517,35 @@ shinyServer(function(input, output, session) {
     
     map_data <- filtered_restaurants() %>%
       left_join(avg_scores_per_restaurant(), by = c("Name" = "Restaurant")) %>%
-      filter(!is.na(Latitude) & !is.na(Longitude))
+      filter(!is.na(Latitude) & !is.na(Longitude)) %>%
+      mutate(Season = as.factor(Season)) # Treat Season as a factor for coloring
+    
+    # Create a color palette for the seasons
+    season_colors <- colorFactor(palette = "viridis", domain = map_data$Season)
     
     map_data$popup_label <- paste(
       "<strong>", map_data$Name, "</strong><br/>",
+      "Season: ", map_data$Season, "<br/>",
       "Overall Score: ", map_data$Overall, "<br/>",
       "Chosen by: ", map_data$ChosenBy
     )
     
     leaflet(data = map_data) %>%
       addTiles() %>%
-      addMarkers(
+      addCircleMarkers(
         lng = ~Longitude, 
         lat = ~Latitude,
-        popup = ~popup_label
+        popup = ~popup_label,
+        color = ~season_colors(Season),
+        stroke = FALSE,
+        fillOpacity = 0.8
+      ) %>%
+      addLegend(
+        "bottomright",
+        pal = season_colors,
+        values = ~Season,
+        title = "Season",
+        opacity = 1
       )
   })
   
@@ -813,3 +828,4 @@ shinyServer(function(input, output, session) {
     )
   })
 })
+
