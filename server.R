@@ -331,6 +331,7 @@ shinyServer(function(input, output, session) {
     )
   })
   
+  # --- REVERTED AND FIXED HIGHS AND LOWS COMMENTARY ---
   output$highs_lows_commentary <- renderUI({
     req(nrow(filtered_scores()) > 0)
     highest_food <- filtered_scores() %>% filter(Food == max(Food, na.rm = TRUE))
@@ -342,15 +343,24 @@ shinyServer(function(input, output, session) {
     highest_overall <- filtered_scores() %>% filter(Overall == max(Overall, na.rm = TRUE))
     lowest_overall <- filtered_scores() %>% filter(Overall == min(Overall, na.rm = TRUE))
     
+    # This function safely creates the text, preventing errors if a dataframe is empty
+    create_text <- function(df, score_name, type) {
+      if (nrow(df) > 0) {
+        paste0("<strong>", if(type=="high") "Best" else "Lowest", " ", score_name, " Score:</strong> ", df[[score_name]][1], " awarded by ", paste(df$Person, collapse=", "), " for ", paste(unique(df$Restaurant), collapse=", "), ".")
+      } else {
+        paste0("<strong>No ", score_name, " data available for this season.</strong>")
+      }
+    }
+    
     tags$ul(
-      tags$li(HTML(paste0("<strong>Best Food Score:</strong> ", highest_food$Food[1], " awarded by ", paste(highest_food$Person, collapse=", "), " for ", paste(unique(highest_food$Restaurant), collapse=", "), "."))),
-      tags$li(HTML(paste0("<strong>Lowest Food Score:</strong> ", lowest_food$Food[1], " awarded by ", paste(lowest_food$Person, collapse=", "), " for ", paste(unique(lowest_food$Restaurant), collapse=", "), "."))),
-      tags$li(HTML(paste0("<strong>Best Value Score:</strong> ", highest_value$Value[1], " awarded by ", paste(highest_value$Person, collapse=", "), " for ", paste(unique(highest_value$Restaurant), collapse=", "), "."))),
-      tags$li(HTML(paste0("<strong>Lowest Value Score:</strong> ", lowest_value$Value[1], " awarded by ", paste(lowest_value$Person, collapse=", "), " for ", paste(unique(lowest_value$Restaurant), collapse=", "), "."))),
-      tags$li(HTML(paste0("<strong>Best Experience Score:</strong> ", highest_exp$Experience[1], " awarded by ", paste(highest_exp$Person, collapse=", "), " for ", paste(unique(highest_exp$Restaurant), collapse=", "), "."))),
-      tags$li(HTML(paste0("<strong>Lowest Experience Score:</strong> ", lowest_exp$Experience[1], " awarded by ", paste(lowest_exp$Person, collapse=", "), " for ", paste(unique(lowest_exp$Restaurant), collapse=", "), "."))),
-      tags$li(HTML(paste0("<strong>Best Overall Score:</strong> ", highest_overall$Overall[1], " awarded by ", paste(highest_overall$Person, collapse=", "), " for ", paste(unique(highest_overall$Restaurant), collapse=", "), "."))),
-      tags$li(HTML(paste0("<strong>Lowest Overall Score:</strong> ", lowest_overall$Overall[1], " awarded by ", paste(lowest_overall$Person, collapse=", "), " for ", paste(unique(lowest_overall$Restaurant), collapse=", "), ".")))
+      tags$li(HTML(create_text(highest_food, "Food", "high"))),
+      tags$li(HTML(create_text(lowest_food, "Food", "low"))),
+      tags$li(HTML(create_text(highest_value, "Value", "high"))),
+      tags$li(HTML(create_text(lowest_value, "Value", "low"))),
+      tags$li(HTML(create_text(highest_exp, "Experience", "high"))),
+      tags$li(HTML(create_text(lowest_exp, "Experience", "low"))),
+      tags$li(HTML(create_text(highest_overall, "Overall", "high"))),
+      tags$li(HTML(create_text(lowest_overall, "Overall", "low")))
     )
   })
   
@@ -517,19 +527,7 @@ shinyServer(function(input, output, session) {
     
     map_data <- filtered_restaurants() %>%
       left_join(avg_scores_per_restaurant(), by = c("Name" = "Restaurant")) %>%
-      filter(!is.na(Latitude) & !is.na(Longitude)) %>%
-      mutate(Season = as.factor(Season))
-    
-    # Create a color palette function for the seasons
-    season_color_pal <- colorFactor(palette = "viridis", domain = levels(map_data$Season))
-    
-    # Create the icons list *before* the leaflet call
-    icons <- awesomeIcons(
-      icon = 'utensils',
-      iconColor = 'white',
-      library = 'fa',
-      markerColor = season_color_pal(map_data$Season)
-    )
+      filter(!is.na(Latitude) & !is.na(Longitude))
     
     map_data$popup_label <- paste(
       "<strong>", map_data$Name, "</strong><br/>",
@@ -540,18 +538,10 @@ shinyServer(function(input, output, session) {
     
     leaflet(data = map_data) %>%
       addTiles() %>%
-      addAwesomeMarkers(
+      addMarkers(
         lng = ~Longitude, 
         lat = ~Latitude,
-        popup = ~popup_label,
-        icon = icons
-      ) %>%
-      addLegend(
-        "bottomright",
-        pal = season_color_pal,
-        values = ~Season,
-        title = "Season",
-        opacity = 1
+        popup = ~popup_label
       )
   })
   
@@ -834,4 +824,3 @@ shinyServer(function(input, output, session) {
     )
   })
 })
-
