@@ -9,9 +9,9 @@ library(RColorBrewer)
 library(ggradar)
 library(googlesheets4)
 library(googledrive)
-library(leaflet)      # For the map
-library(tidygeocoder) # For converting addresses to coordinates
-library(stringr)      # For wrapping text
+library(leaflet)
+library(tidygeocoder)
+library(stringr)
 
 # --- Google Sheets Authentication and Setup ---
 if (Sys.getenv("GOOGLE_APPLICATION_CREDENTIALS") != "") {
@@ -28,22 +28,22 @@ sheet_id <- Sys.getenv("SHEET_ID")
 # The entire server logic must be wrapped in this function
 shinyServer(function(input, output, session) {
   
-  # --- Reactive Values to hold a local copy of the data ---
+  # --- Reactive Values to hold a local copy of the data and season selection ---
   rv <- reactiveValues(
     restaurants = data.frame(),
-    scores = data.frame()
+    scores = data.frame(),
+    season_selected = NULL
   )
   
   # --- Function to load data from Google Sheets ---
   load_data <- function() {
     tryCatch({
-      restaurants_data <- read_sheet(sheet_id, sheet = "Restaurants", col_types = "cDdcccdd")
+      # Updated col_types to include the new 'Season' column (d for numeric)
+      restaurants_data <- read_sheet(sheet_id, sheet = "Restaurants", col_types = "cDdcccddd")
       scores_data <- read_sheet(sheet_id, sheet = "Scores", col_types = "ccdddd")
       
       rv$restaurants <- restaurants_data
       rv$scores <- scores_data
-      
-      updateSelectInput(session, "restaurant_selector", choices = restaurants_data$Name)
       
     }, error = function(e) {
       showNotification(paste("Error loading data:", e$message), type = "error", duration = 10)
@@ -52,6 +52,189 @@ shinyServer(function(input, output, session) {
   
   # Load data when the app starts
   load_data()
+  
+  # --- UI Rendering: Season Selector or Main App ---
+  output$main_content <- renderUI({
+    if (is.null(rv$season_selected)) {
+      # If no season is selected, show the landing page
+      fluidPage(
+        titlePanel("Welcome to the Banquet Boys App"),
+        wellPanel(
+          h3("Select a Season to View"),
+          p("Please choose which season's data you would like to analyze."),
+          uiOutput("season_selector_ui"),
+          actionButton("view_season_btn", "View Data", class = "btn-primary btn-lg", icon = icon("eye"))
+        )
+      )
+    } else {
+      # If a season is selected, show the main app UI
+      navbarPage(
+        "Banquet Boys",
+        id = "main_nav",
+        header = tags$head(
+          tags$style(HTML("
+                        .tab-content { padding-top: 20px; }
+                        .commentary-section { padding: 15px; background-color: #f5f5f5; border-radius: 5px; margin-bottom: 20px; }
+                    "))
+        ),
+        tabPanel("Overall",
+                 fluidPage(
+                   h3("Chooser Summary"),
+                   p("Which diner has chosen a restaurant in each price category?"),
+                   DT::dataTableOutput("chooser_summary_table"),
+                   hr(),
+                   h3("Restaurant Timeline"),
+                   p("A timeline of all restaurants visited to date."),
+                   plotOutput("restaurant_timeline_plot"),
+                   hr(),
+                   h3("Current Standings"),
+                   p("What is the average score of the restaurants chosen by each diner?"),
+                   selectInput("standings_category_selector", "Choose a Category to Compare:",
+                               choices = c("Overall", "Food", "Value", "Experience"),
+                               selected = "Overall"),
+                   plotOutput("diner_standings_plot"),
+                   hr(),
+                   h3("Restaurant Performance by Price Category"),
+                   fluidRow(
+                     column(6, selectInput("price_plot_category_selector", "Choose a Score Category:", choices = c("Overall", "Food", "Value", "Experience"), selected = "Overall")),
+                     column(6, selectInput("price_category_filter_selector", "Choose a Price Category:", choices = c("All Restaurants", "Cheap", "Medium", "Expensive"), selected = "All Restaurants"))
+                   ),
+                   plotOutput("price_category_performance_plot")
+                 )
+        ),
+        tabPanel("Commentary",
+                 fluidPage(
+                   h2("The Story So Far: A Statistical Overview"),
+                   div(class = "commentary-section", h4("The Raters: A Deeper Dive"), uiOutput("raters_commentary")),
+                   div(class = "commentary-section", h4("Does Money Buy Happiness?"), uiOutput("money_commentary")),
+                   div(class = "commentary-section", h4("The Chooser's Bias"), uiOutput("bias_commentary")),
+                   div(class = "commentary-section", h4("Highs and Lows"), uiOutput("highs_lows_commentary")),
+                   div(class = "commentary-section", h4("Points of Contention"), uiOutput("contention_commentary"))
+                 )
+        ),
+        navbarMenu("Data Entry",
+                   tabPanel("Manage Restaurants",
+                            fluidRow(
+                              column(6,
+                                     wellPanel(
+                                       h3("Add a New Dining Spot"),
+                                       textInput("new_restaurant_name", "Restaurant Name:", ""),
+                                       textInput("new_restaurant_address", "Restaurant Address:", placeholder = "e.g., 123 Main Street, London"),
+                                       numericInput("season_input", "Season:", value = 1, min = 1, step = 1), # Added Season input
+                                       dateInput("visit_date", "Date of Visit:", value = Sys.Date(), format = "dd/mm/yyyy"),
+                                       numericInput("cost_per_person", "Cost Per Person (£):", value = 30, min = 0, step = 1),
+                                       selectInput("chosen_by_selector", "Chosen By:", choices = c("Will", "Phil", "Loz", "Pells")),
+                                       selectInput("price_category_selector", "Price Category:", choices = c("Cheap", "Medium", "Expensive")),
+                                       actionButton("add_restaurant_btn", "Add Restaurant", class = "btn-primary", icon = icon("plus"))
+                                     ),
+                                     wellPanel(
+                                       h3("Delete a Restaurant"),
+                                       uiOutput("delete_restaurant_ui"),
+                                       actionButton("delete_restaurant_btn", "Delete Restaurant", class = "btn-danger", icon = icon("trash-alt"))
+                                     )
+                              ),
+                              column(6, h4("Current Restaurant List"), DT::dataTableOutput("restaurant_list_table"))
+                            )),
+                   tabPanel("Enter & Manage Scores",
+                            sidebarLayout(
+                              sidebarPanel(
+                                h3("Submit Your Ratings"),
+                                selectInput("person_selector", "Select Your Name:", choices = c("Will", "Phil", "Loz", "Pells")),
+                                uiOutput("restaurant_selector_ui"),
+                                sliderInput("food_score", "Food Score (1-10):", min = 1, max = 10, value = 5, step = 0.1),
+                                sliderInput("value_score", "Value Score (1-10):", min = 1, max = 10, value = 5, step = 0.1),
+                                sliderInput("experience_score", "Experience Score (1-10):", min = 1, max = 10, value = 5, step = 0.1),
+                                actionButton("submit_score_btn", "Submit/Update Scores", class = "btn-success", icon = icon("check")),
+                                hr(),
+                                h3("Delete a Score Entry"),
+                                uiOutput("delete_score_ui"),
+                                actionButton("delete_score_btn", "Delete Selected Score", class = "btn-warning", icon = icon("times"))
+                              ),
+                              mainPanel(h4("All Submitted Scores"), DT::dataTableOutput("scores_table"))
+                            ))
+        ),
+        tabPanel("Map",
+                 fluidPage(fluidRow(column(12, leafletOutput("restaurant_map", height = "800px"))))
+        ),
+        navbarMenu("Analysis",
+                   tabPanel("By Restaurant",
+                            fluidPage(sidebarLayout(
+                              sidebarPanel(uiOutput("analysis_restaurant_selector_ui")),
+                              mainPanel(
+                                h3(textOutput("by_restaurant_title")),
+                                plotOutput("by_restaurant_plot"), hr(),
+                                h4("Scores Breakdown"),
+                                DT::dataTableOutput("by_restaurant_table")
+                              )
+                            ))
+                   ),
+                   tabPanel("By Person",
+                            fluidPage(
+                              h3("Average Scoring Tendencies"),
+                              p("How each diner tends to score across all restaurants."),
+                              fluidRow(
+                                column(6, plotOutput("by_person_comparison_plot")),
+                                column(6, plotOutput("by_person_spider_plot"))
+                              ), hr(),
+                              h3("Personal Restaurant Rankings"),
+                              p("Each diner's favorite restaurants, based on their own total scores. Click column headers to sort."),
+                              fluidRow(
+                                column(6, h4("Will"), DT::dataTableOutput("will_ranks")),
+                                column(6, h4("Phil"), DT::dataTableOutput("phil_ranks"))
+                              ),
+                              fluidRow(
+                                column(6, h4("Loz"), DT::dataTableOutput("loz_ranks")),
+                                column(6, h4("Pells"), DT::dataTableOutput("pells_ranks"))
+                              )
+                            )
+                   ),
+                   tabPanel("Sensitivity",
+                            fluidPage(
+                              h3("Sensitivity Analysis"),
+                              p("How do the standings change if we ignore the score from the person who chose the restaurant?"),
+                              selectInput("sensitivity_category_selector", "Choose a Category to Compare:",
+                                          choices = c("Overall", "Food", "Value", "Experience"),
+                                          selected = "Overall"),
+                              plotOutput("sensitivity_standings_plot")
+                            )
+                   ),
+                   tabPanel("Raw Data",
+                            fluidPage(
+                              h3("Full Data Table"),
+                              p("All scores and restaurant information in one place. Use the boxes at the top of each column to filter the data."),
+                              DT::dataTableOutput("overall_full_data_table")
+                            )
+                   )
+        )
+      )
+    }
+  })
+  
+  # --- Season Selection Logic ---
+  output$season_selector_ui <- renderUI({
+    req(nrow(rv$restaurants) > 0)
+    seasons <- sort(unique(rv$restaurants$Season))
+    selectInput("season_choice", "Season:", choices = c("All Seasons", seasons))
+  })
+  
+  observeEvent(input$view_season_btn, {
+    rv$season_selected <- input$season_choice
+  })
+  
+  # --- Data Filtering Reactives based on Season Selection ---
+  filtered_restaurants <- reactive({
+    req(rv$season_selected)
+    if (rv$season_selected == "All Seasons") {
+      return(rv$restaurants)
+    } else {
+      return(rv$restaurants %>% filter(Season == rv$season_selected))
+    }
+  })
+  
+  filtered_scores <- reactive({
+    req(filtered_restaurants())
+    rv$scores %>% filter(Restaurant %in% filtered_restaurants()$Name)
+  })
   
   # --- Professional Plot Theme ---
   professional_theme <- theme_minimal(base_size = 15) +
@@ -64,12 +247,14 @@ shinyServer(function(input, output, session) {
       legend.title = element_blank()
     )
   
+  # --- All subsequent logic now uses filtered_restaurants() and filtered_scores() ---
+  
   # --- Commentary Tab Logic (Rebuilt) ---
   output$raters_commentary <- renderUI({
-    req(nrow(rv$scores) > 0)
-    generous_food <- rv$scores %>% group_by(Person) %>% summarise(Avg = mean(Food, na.rm = TRUE)) %>% filter(Avg == max(Avg))
-    generous_value <- rv$scores %>% group_by(Person) %>% summarise(Avg = mean(Value, na.rm = TRUE)) %>% filter(Avg == max(Avg))
-    generous_exp <- rv$scores %>% group_by(Person) %>% summarise(Avg = mean(Experience, na.rm = TRUE)) %>% filter(Avg == max(Avg))
+    req(nrow(filtered_scores()) > 0)
+    generous_food <- filtered_scores() %>% group_by(Person) %>% summarise(Avg = mean(Food, na.rm = TRUE)) %>% filter(Avg == max(Avg))
+    generous_value <- filtered_scores() %>% group_by(Person) %>% summarise(Avg = mean(Value, na.rm = TRUE)) %>% filter(Avg == max(Avg))
+    generous_exp <- filtered_scores() %>% group_by(Person) %>% summarise(Avg = mean(Experience, na.rm = TRUE)) %>% filter(Avg == max(Avg))
     
     tags$ul(
       tags$li(strong("The Foodie: "), paste(generous_food$Person, collapse = ", "), " gives the highest average scores for Food (", round(generous_food$Avg[1], 2), ")."),
@@ -79,7 +264,7 @@ shinyServer(function(input, output, session) {
   })
   
   output$money_commentary <- renderUI({
-    req(nrow(rv$scores) > 0)
+    req(nrow(filtered_scores()) > 0)
     price_effect <- full_data_reactive() %>%
       group_by(PriceCategory) %>%
       summarise(
@@ -99,7 +284,7 @@ shinyServer(function(input, output, session) {
   })
   
   output$bias_commentary <- renderUI({
-    req(nrow(rv$scores) > 0)
+    req(nrow(filtered_scores()) > 0)
     
     bias_data <- full_data_reactive() %>%
       group_by(Restaurant) %>%
@@ -141,15 +326,15 @@ shinyServer(function(input, output, session) {
   })
   
   output$highs_lows_commentary <- renderUI({
-    req(nrow(rv$scores) > 0)
-    highest_food <- rv$scores %>% filter(Food == max(Food, na.rm = TRUE))
-    lowest_food <- rv$scores %>% filter(Food == min(Food, na.rm = TRUE))
-    highest_value <- rv$scores %>% filter(Value == max(Value, na.rm = TRUE))
-    lowest_value <- rv$scores %>% filter(Value == min(Value, na.rm = TRUE))
-    highest_exp <- rv$scores %>% filter(Experience == max(Experience, na.rm = TRUE))
-    lowest_exp <- rv$scores %>% filter(Experience == min(Experience, na.rm = TRUE))
-    highest_overall <- rv$scores %>% filter(Overall == max(Overall, na.rm = TRUE))
-    lowest_overall <- rv$scores %>% filter(Overall == min(Overall, na.rm = TRUE))
+    req(nrow(filtered_scores()) > 0)
+    highest_food <- filtered_scores() %>% filter(Food == max(Food, na.rm = TRUE))
+    lowest_food <- filtered_scores() %>% filter(Food == min(Food, na.rm = TRUE))
+    highest_value <- filtered_scores() %>% filter(Value == max(Value, na.rm = TRUE))
+    lowest_value <- filtered_scores() %>% filter(Value == min(Value, na.rm = TRUE))
+    highest_exp <- filtered_scores() %>% filter(Experience == max(Experience, na.rm = TRUE))
+    lowest_exp <- filtered_scores() %>% filter(Experience == min(Experience, na.rm = TRUE))
+    highest_overall <- filtered_scores() %>% filter(Overall == max(Overall, na.rm = TRUE))
+    lowest_overall <- filtered_scores() %>% filter(Overall == min(Overall, na.rm = TRUE))
     
     tags$ul(
       tags$li(HTML(paste0("<strong>Best Food Score:</strong> ", highest_food$Food[1], " awarded by ", paste(highest_food$Person, collapse=", "), " for ", paste(unique(highest_food$Restaurant), collapse=", "), "."))),
@@ -164,9 +349,9 @@ shinyServer(function(input, output, session) {
   })
   
   output$contention_commentary <- renderUI({
-    req(nrow(rv$scores) > 0)
+    req(nrow(filtered_scores()) > 0)
     
-    contention_data <- rv$scores %>%
+    contention_data <- filtered_scores() %>%
       group_by(Restaurant) %>%
       summarise(
         ScoreRange = max(Overall, na.rm = TRUE) - min(Overall, na.rm = TRUE),
@@ -178,23 +363,28 @@ shinyServer(function(input, output, session) {
       most_contentious <- contention_data %>%
         filter(ScoreRange == max(ScoreRange, na.rm = TRUE))
       
-      scores_for_contention <- rv$scores %>%
-        filter(Restaurant == most_contentious$Restaurant[1]) %>%
-        arrange(Person)
+      scores_for_contention <- filtered_scores() %>%
+        filter(Restaurant %in% most_contentious$Restaurant) %>%
+        arrange(Restaurant, Person)
       
-      scores_text <- paste(scores_for_contention$Person, ":", scores_for_contention$Overall, collapse = ", ")
+      # Create a summary text for each contentious restaurant
+      commentary_text <- lapply(unique(most_contentious$Restaurant), function(rest_name) {
+        specific_scores <- scores_for_contention %>% filter(Restaurant == rest_name)
+        scores_text <- paste(specific_scores$Person, ":", specific_scores$Overall, collapse = ", ")
+        range_val <- most_contentious %>% filter(Restaurant == rest_name) %>% pull(ScoreRange)
+        paste0(strong(rest_name), " (Range: ", round(range_val, 2), "). The scores were: ", scores_text, ".")
+      })
       
-      p("The most debated restaurant so far, with the biggest range in 'Overall' scores, has been ", 
-        strong(paste(most_contentious$Restaurant, collapse=" & ")), 
-        " (Range: ", round(most_contentious$ScoreRange[1], 2), "). The scores were: ", scores_text, ".")
+      tagList(p("The most debated restaurant(s) so far, with the biggest range in 'Overall' scores:"), HTML(paste(commentary_text, collapse="<br/>")))
     } else {
       p("There hasn't been significant disagreement on any restaurant so far.")
     }
   })
   
+  
   # --- Tab 1: Manage Restaurants ---
   observeEvent(input$add_restaurant_btn, {
-    req(input$new_restaurant_name, input$new_restaurant_address)
+    req(input$new_restaurant_name, input$new_restaurant_address, input$season_input)
     new_name <- trimws(input$new_restaurant_name)
     new_address <- trimws(input$new_restaurant_address)
     
@@ -212,26 +402,28 @@ shinyServer(function(input, output, session) {
         ChosenBy = input$chosen_by_selector, PriceCategory = input$price_category_selector,
         Address = new_address,
         Latitude = geocoded_address$lat,
-        Longitude = geocoded_address$long
+        Longitude = geocoded_address$long,
+        Season = input$season_input
       )
       
       sheet_append(sheet_id, new_restaurant_data, sheet = "Restaurants")
       showNotification("Restaurant added successfully!", type = "message")
       updateTextInput(session, "new_restaurant_name", value = "")
       updateTextInput(session, "new_restaurant_address", value = "")
-      load_data()
+      load_data() # Reload all data to keep rv in sync
     }
   })
   
   output$delete_restaurant_ui <- renderUI({
-    req(nrow(rv$restaurants) > 0)
-    selectInput("restaurant_to_delete", "Select Restaurant to Delete:", choices = rv$restaurants$Name)
+    req(nrow(filtered_restaurants()) > 0)
+    selectInput("restaurant_to_delete", "Select Restaurant to Delete:", choices = filtered_restaurants()$Name)
   })
   
   observeEvent(input$delete_restaurant_btn, {
     req(input$restaurant_to_delete)
     restaurant_name <- input$restaurant_to_delete
     
+    # We need to modify the full dataset from rv, not the filtered one
     updated_restaurants <- rv$restaurants %>% filter(Name != restaurant_name)
     updated_scores <- rv$scores %>% filter(Restaurant != restaurant_name)
     
@@ -243,9 +435,9 @@ shinyServer(function(input, output, session) {
   })
   
   output$restaurant_list_table <- DT::renderDataTable({
-    req(nrow(rv$restaurants) > 0)
+    req(nrow(filtered_restaurants()) > 0)
     DT::datatable(
-      rv$restaurants %>% select(-Latitude, -Longitude),
+      filtered_restaurants() %>% select(-Latitude, -Longitude),
       rownames = FALSE,
       options = list(paging = FALSE, lengthChange = FALSE, searching = TRUE, info = FALSE),
       class = 'cell-border stripe'
@@ -254,8 +446,9 @@ shinyServer(function(input, output, session) {
   
   # --- Tab 2: Enter & Manage Scores ---
   output$restaurant_selector_ui <- renderUI({
-    req(nrow(rv$restaurants) > 0)
-    selectInput("restaurant_selector", "Select Restaurant:", choices = rv$restaurants$Name)
+    req(nrow(filtered_restaurants()) > 0)
+    # The selector should only show restaurants from the selected season
+    selectInput("restaurant_selector", "Select Restaurant:", choices = filtered_restaurants()$Name)
   })
   
   observeEvent(input$submit_score_btn, {
@@ -267,27 +460,31 @@ shinyServer(function(input, output, session) {
       Overall = overall_score
     )
     
+    # Modify the full rv$scores dataset
     existing_row_index <- which(rv$scores$Person == input$person_selector & rv$scores$Restaurant == input$restaurant_selector)
     
+    temp_scores <- rv$scores
     if (length(existing_row_index) > 0) {
-      rv$scores[existing_row_index, ] <- new_score
+      temp_scores[existing_row_index, ] <- new_score
     } else {
-      rv$scores <- rbind(rv$scores, new_score)
+      temp_scores <- rbind(temp_scores, new_score)
     }
     
-    write_sheet(rv$scores, sheet_id, sheet = "Scores")
+    write_sheet(temp_scores, sheet_id, sheet = "Scores")
     showNotification("Scores submitted successfully!", type = "message")
     load_data()
   })
   
   output$delete_score_ui <- renderUI({
-    req(nrow(rv$scores) > 0)
-    choices <- paste(rv$scores$Person, "-", rv$scores$Restaurant)
+    req(nrow(filtered_scores()) > 0)
+    choices <- paste(filtered_scores()$Person, "-", filtered_scores()$Restaurant)
     selectInput("score_to_delete", "Select Score to Delete:", choices = choices)
   })
   
   observeEvent(input$delete_score_btn, {
     req(input$score_to_delete)
+    
+    # Find the index in the full rv$scores dataset
     selected_index <- which(paste(rv$scores$Person, "-", rv$scores$Restaurant) == input$score_to_delete)
     
     if(length(selected_index) > 0) {
@@ -299,9 +496,9 @@ shinyServer(function(input, output, session) {
   })
   
   output$scores_table <- DT::renderDataTable({
-    req(nrow(rv$scores) > 0)
+    req(nrow(filtered_scores()) > 0)
     DT::datatable(
-      rv$scores,
+      filtered_scores(),
       rownames = FALSE,
       options = list(paging = FALSE, lengthChange = FALSE, searching = TRUE, info = FALSE),
       class = 'cell-border stripe'
@@ -310,9 +507,9 @@ shinyServer(function(input, output, session) {
   
   # --- New Tab: Map ---
   output$restaurant_map <- renderLeaflet({
-    req(nrow(rv$restaurants) > 0)
+    req(nrow(filtered_restaurants()) > 0)
     
-    map_data <- rv$restaurants %>%
+    map_data <- filtered_restaurants() %>%
       left_join(avg_scores_per_restaurant(), by = c("Name" = "Restaurant")) %>%
       filter(!is.na(Latitude) & !is.na(Longitude))
     
@@ -333,8 +530,8 @@ shinyServer(function(input, output, session) {
   
   # --- Analysis Tab Reactives ---
   avg_scores_per_restaurant <- reactive({
-    req(nrow(rv$scores) > 0)
-    rv$scores %>%
+    req(nrow(filtered_scores()) > 0)
+    filtered_scores() %>%
       group_by(Restaurant) %>%
       summarise(
         Food = round(mean(Food, na.rm = TRUE), 2), Value = round(mean(Value, na.rm = TRUE), 2),
@@ -344,21 +541,21 @@ shinyServer(function(input, output, session) {
   })
   
   full_data_reactive <- reactive({
-    req(nrow(rv$scores) > 0)
-    left_join(rv$scores, rv$restaurants, by = c("Restaurant" = "Name"))
+    req(nrow(filtered_scores()) > 0)
+    left_join(filtered_scores(), filtered_restaurants(), by = c("Restaurant" = "Name"))
   })
   
   # --- Analysis: Overall ---
   
   output$chooser_summary_table <- DT::renderDataTable({
-    req(nrow(rv$restaurants) > 0)
+    req(nrow(filtered_restaurants()) > 0)
     
     diners <- c("Will", "Phil", "Loz", "Pells")
     categories <- c("Cheap", "Medium", "Expensive")
     
     complete_grid <- expand.grid(ChosenBy = diners, PriceCategory = categories, stringsAsFactors = FALSE)
     
-    choice_summary <- rv$restaurants %>%
+    choice_summary <- filtered_restaurants() %>%
       group_by(ChosenBy, PriceCategory) %>%
       summarise(count = n(), .groups = 'drop')
     
@@ -385,14 +582,11 @@ shinyServer(function(input, output, session) {
     )
   })
   
-  # Updated timeline plot
   output$restaurant_timeline_plot <- renderPlot({
-    req(nrow(rv$restaurants) > 0)
+    req(nrow(filtered_restaurants()) > 0)
     
-    timeline_data <- rv$restaurants %>%
-      arrange(Date)
+    timeline_data <- filtered_restaurants() %>% arrange(Date)
     
-    # Define the date range for the x-axis
     min_date <- as.Date(paste0(format(min(timeline_data$Date), "%Y-%m"), "-01"))
     max_date_raw <- max(timeline_data$Date)
     max_date <- seq(max_date_raw, by = "month", length.out = 2)[2]
@@ -401,30 +595,25 @@ shinyServer(function(input, output, session) {
       geom_hline(yintercept = 0, color = "gray", size = 1) +
       geom_point(aes(color = ChosenBy), size = 5) +
       geom_text(aes(label = Name), angle = 90, vjust = -0.8, hjust = 0.5, size = 4, fontface = "bold") +
-      scale_x_date(
-        date_breaks = "1 month", 
-        date_labels = "%b %Y",
-        limits = c(min_date, max_date)
-      ) +
+      scale_x_date(date_breaks = "1 month", date_labels = "%b %Y", limits = c(min_date, max_date)) +
       labs(title = "Restaurant Visit Timeline", x = "Date", y = "") +
       professional_theme +
       theme(
-        axis.text.y = element_blank(), 
-        axis.ticks.y = element_blank(),
+        axis.text.y = element_blank(), axis.ticks.y = element_blank(),
         axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
         panel.grid.major.y = element_blank(),
-        plot.margin = unit(c(2, 1, 1, 1), "cm") # Add more top margin for labels
+        plot.margin = unit(c(2, 1, 1, 1), "cm")
       ) +
       scale_color_brewer(palette = "Set1")
   })
   
   output$diner_standings_plot <- renderPlot({
-    req(nrow(rv$scores) > 0, input$standings_category_selector)
+    req(nrow(filtered_scores()) > 0, input$standings_category_selector)
     
     selected_category <- input$standings_category_selector
     
     chooser_performance_data <- avg_scores_per_restaurant() %>%
-      left_join(rv$restaurants, by = c("Restaurant" = "Name")) %>%
+      left_join(filtered_restaurants(), by = c("Restaurant" = "Name")) %>%
       group_by(ChosenBy) %>%
       summarise(AveragePerformance = mean(.data[[selected_category]], na.rm = TRUE)) %>%
       rename(Person = ChosenBy)
@@ -441,7 +630,7 @@ shinyServer(function(input, output, session) {
   })
   
   output$price_category_performance_plot <- renderPlot({
-    req(nrow(rv$scores) > 0, input$price_plot_category_selector, input$price_category_filter_selector)
+    req(nrow(filtered_scores()) > 0, input$price_plot_category_selector, input$price_category_filter_selector)
     
     selected_score_cat <- input$price_plot_category_selector
     selected_price_cat <- input$price_category_filter_selector
@@ -449,8 +638,7 @@ shinyServer(function(input, output, session) {
     plot_data <- full_data_reactive()
     
     if (selected_price_cat != "All Restaurants") {
-      plot_data <- plot_data %>%
-        filter(PriceCategory == selected_price_cat)
+      plot_data <- plot_data %>% filter(PriceCategory == selected_price_cat)
     }
     
     plot_data <- plot_data %>%
@@ -473,28 +661,23 @@ shinyServer(function(input, output, session) {
   
   # --- Analysis: By Restaurant ---
   output$analysis_restaurant_selector_ui <- renderUI({
-    req(nrow(rv$restaurants) > 0)
-    selectInput("analysis_restaurant", "Select a Restaurant:", choices = rv$restaurants$Name)
+    req(nrow(filtered_restaurants()) > 0)
+    selectInput("analysis_restaurant", "Select a Restaurant:", choices = filtered_restaurants()$Name)
   })
   output$by_restaurant_title <- renderText({
     req(input$analysis_restaurant)
-    info <- rv$restaurants %>% filter(Name == input$analysis_restaurant)
+    info <- filtered_restaurants() %>% filter(Name == input$analysis_restaurant)
     paste0("Analysis for: ", info$Name, " (Visited: ", format(info$Date, "%d %b %Y"), ", Cost: £", info$CostPerPerson, ", Chosen by ", info$ChosenBy, " | ", info$PriceCategory, ")")
   })
   
   output$by_restaurant_table <- DT::renderDataTable({
     req(input$analysis_restaurant)
-    table_data <- rv$scores %>% filter(Restaurant == input$analysis_restaurant)
-    DT::datatable(
-      table_data,
-      rownames = FALSE,
-      options = list(paging = FALSE, lengthChange = FALSE, searching = FALSE, info = FALSE),
-      class = 'cell-border stripe'
-    )
+    table_data <- filtered_scores() %>% filter(Restaurant == input$analysis_restaurant)
+    DT::datatable(table_data, rownames = FALSE, options = list(paging = FALSE, lengthChange = FALSE, searching = FALSE, info = FALSE), class = 'cell-border stripe')
   })
   output$by_restaurant_plot <- renderPlot({
     req(input$analysis_restaurant)
-    plot_data <- rv$scores %>%
+    plot_data <- filtered_scores() %>%
       filter(Restaurant == input$analysis_restaurant) %>%
       pivot_longer(cols = c(Food, Value, Experience, Overall), names_to = "Category", values_to = "Score") %>%
       mutate(Category = factor(Category, levels = c("Food", "Value", "Experience", "Overall")))
@@ -511,8 +694,8 @@ shinyServer(function(input, output, session) {
   
   # --- Analysis: By Person ---
   avg_scores_by_person_reactive <- reactive({
-    req(nrow(rv$scores) > 0)
-    rv$scores %>%
+    req(nrow(filtered_scores()) > 0)
+    filtered_scores() %>%
       group_by(Person) %>%
       summarise(
         Food = mean(Food, na.rm = TRUE), Value = mean(Value, na.rm = TRUE),
@@ -537,10 +720,9 @@ shinyServer(function(input, output, session) {
   })
   
   output$by_person_spider_plot <- renderPlot({
-    req(nrow(rv$scores) > 0)
+    req(nrow(filtered_scores()) > 0)
     
-    plot_data <- avg_scores_by_person_reactive() %>%
-      select(Person, Food, Value, Experience, Overall)
+    plot_data <- avg_scores_by_person_reactive() %>% select(Person, Food, Value, Experience, Overall)
     
     data_range <- plot_data %>% select(-Person)
     min_val <- min(data_range, na.rm = TRUE)
@@ -549,24 +731,15 @@ shinyServer(function(input, output, session) {
     grid_min <- min_val - 0.2
     grid_max <- max_val + 0.2
     
-    scaled_plot_data <- plot_data %>%
-      mutate(across(where(is.numeric), ~ (. - grid_min) / (grid_max - grid_min)))
+    scaled_plot_data <- plot_data %>% mutate(across(where(is.numeric), ~ (. - grid_min) / (grid_max - grid_min)))
     
     grid_mid <- (grid_min + grid_max) / 2
-    radar_labels <- c(
-      as.character(round(grid_min, 1)), 
-      as.character(round(grid_mid, 1)), 
-      as.character(round(grid_max, 1))
-    )
+    radar_labels <- c(as.character(round(grid_min, 1)), as.character(round(grid_mid, 1)), as.character(round(grid_max, 1)))
     
     ggradar(
-      scaled_plot_data, 
-      values.radar = radar_labels,
-      grid.min = 0,
-      grid.mid = 0.5,
-      grid.max = 1,
-      group.line.width = 1, 
-      group.point.size = 3,
+      scaled_plot_data, values.radar = radar_labels,
+      grid.min = 0, grid.mid = 0.5, grid.max = 1,
+      group.line.width = 1, group.point.size = 3,
       group.colours = brewer.pal(4, "Set1"),
       legend.title = "Diner",
       plot.title = str_wrap("Average Rating Tendencies (Radar Chart)", 20)
@@ -574,38 +747,25 @@ shinyServer(function(input, output, session) {
   })
   
   personal_ranks <- reactive({
-    req(nrow(rv$scores) > 0)
-    rv$scores %>% select(Person, Restaurant, Food, Value, Experience, Overall)
+    req(nrow(filtered_scores()) > 0)
+    filtered_scores() %>% select(Person, Restaurant, Food, Value, Experience, Overall)
   })
   
   lapply(c("Will", "Phil", "Loz", "Pells"), function(diner_name) {
     output[[paste0(tolower(diner_name), "_ranks")]] <- DT::renderDataTable({
-      table_data <- personal_ranks() %>%
-        filter(Person == diner_name) %>%
-        select(-Person)
-      
-      DT::datatable(
-        table_data,
-        rownames = FALSE,
-        options = list(
-          paging = FALSE, lengthChange = FALSE, searching = FALSE, info = FALSE
-        ),
-        class = 'cell-border stripe'
-      )
+      table_data <- personal_ranks() %>% filter(Person == diner_name) %>% select(-Person)
+      DT::datatable(table_data, rownames = FALSE, options = list(paging = FALSE, lengthChange = FALSE, searching = FALSE, info = FALSE), class = 'cell-border stripe')
     })
   })
   
   # --- Analysis: Sensitivity ---
   output$sensitivity_standings_plot <- renderPlot({
-    req(nrow(rv$scores) > 0, input$sensitivity_category_selector)
+    req(nrow(filtered_scores()) > 0, input$sensitivity_category_selector)
     
     selected_category <- input$sensitivity_category_selector
     
-    # Filter out scores where the person is the chooser
-    scores_without_bias <- full_data_reactive() %>%
-      filter(Person != ChosenBy)
+    scores_without_bias <- full_data_reactive() %>% filter(Person != ChosenBy)
     
-    # Calculate new average scores per restaurant based on the filtered data
     avg_scores_sensitivity <- scores_without_bias %>%
       group_by(Restaurant) %>%
       summarise(
@@ -615,7 +775,7 @@ shinyServer(function(input, output, session) {
       )
     
     chooser_performance_data <- avg_scores_sensitivity %>%
-      left_join(rv$restaurants, by = c("Restaurant" = "Name")) %>%
+      left_join(filtered_restaurants(), by = c("Restaurant" = "Name")) %>%
       group_by(ChosenBy) %>%
       summarise(AveragePerformance = mean(.data[[selected_category]], na.rm = TRUE)) %>%
       rename(Person = ChosenBy)
@@ -633,10 +793,9 @@ shinyServer(function(input, output, session) {
   
   # --- Analysis: Raw Data ---
   output$overall_full_data_table <- DT::renderDataTable({
-    req(nrow(rv$scores) > 0)
+    req(nrow(filtered_scores()) > 0)
     DT::datatable(
-      full_data_reactive(),
-      filter = 'top',
+      full_data_reactive(), filter = 'top',
       rownames = FALSE,
       options = list(paging = FALSE, lengthChange = FALSE, searching = TRUE, info = FALSE),
       class = 'cell-border stripe'
