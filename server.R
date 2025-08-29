@@ -28,6 +28,9 @@ sheet_id <- Sys.getenv("SHEET_ID")
 # The entire server logic must be wrapped in this function
 shinyServer(function(input, output, session) {
   
+  # --- List of Diners ---
+  diners_list <- c("Will", "Phil", "Loz", "Pells", "George")
+  
   # --- Reactive Values to hold a local copy of the data and season selection ---
   rv <- reactiveValues(
     restaurants = data.frame(),
@@ -123,7 +126,7 @@ shinyServer(function(input, output, session) {
                                        numericInput("season_input", "Season:", value = 1, min = 1, step = 1), # Added Season input
                                        dateInput("visit_date", "Date of Visit:", value = Sys.Date(), format = "dd/mm/yyyy"),
                                        numericInput("cost_per_person", "Cost Per Person (£):", value = 30, min = 0, step = 1),
-                                       selectInput("chosen_by_selector", "Chosen By:", choices = c("Will", "Phil", "Loz", "Pells")),
+                                       selectInput("chosen_by_selector", "Chosen By:", choices = diners_list),
                                        selectInput("price_category_selector", "Price Category:", choices = c("Cheap", "Medium", "Expensive")),
                                        actionButton("add_restaurant_btn", "Add Restaurant", class = "btn-primary", icon = icon("plus"))
                                      ),
@@ -139,7 +142,7 @@ shinyServer(function(input, output, session) {
                             sidebarLayout(
                               sidebarPanel(
                                 h3("Submit Your Ratings"),
-                                selectInput("person_selector", "Select Your Name:", choices = c("Will", "Phil", "Loz", "Pells")),
+                                selectInput("person_selector", "Select Your Name:", choices = diners_list),
                                 uiOutput("restaurant_selector_ui"),
                                 sliderInput("food_score", "Food Score (1-10):", min = 1, max = 10, value = 5, step = 0.1),
                                 sliderInput("value_score", "Value Score (1-10):", min = 1, max = 10, value = 5, step = 0.1),
@@ -185,6 +188,9 @@ shinyServer(function(input, output, session) {
                               fluidRow(
                                 column(6, h4("Loz"), DT::dataTableOutput("loz_ranks")),
                                 column(6, h4("Pells"), DT::dataTableOutput("pells_ranks"))
+                              ),
+                              fluidRow(
+                                column(6, h4("George"), DT::dataTableOutput("george_ranks"))
                               )
                             )
                    ),
@@ -550,7 +556,7 @@ shinyServer(function(input, output, session) {
   output$chooser_summary_table <- DT::renderDataTable({
     req(nrow(filtered_restaurants()) > 0)
     
-    diners <- c("Will", "Phil", "Loz", "Pells")
+    diners <- diners_list
     categories <- c("Cheap", "Medium", "Expensive")
     
     complete_grid <- expand.grid(ChosenBy = diners, PriceCategory = categories, stringsAsFactors = FALSE)
@@ -724,6 +730,10 @@ shinyServer(function(input, output, session) {
     
     plot_data <- avg_scores_by_person_reactive() %>% select(Person, Food, Value, Experience, Overall)
     
+    # FIX: Make the number of colors dynamic based on data
+    num_diners_in_data <- nrow(plot_data)
+    if(num_diners_in_data < 3) return(NULL) # RColorBrewer needs at least 3
+    
     data_range <- plot_data %>% select(-Person)
     min_val <- min(data_range, na.rm = TRUE)
     max_val <- max(data_range, na.rm = TRUE)
@@ -740,7 +750,8 @@ shinyServer(function(input, output, session) {
       scaled_plot_data, values.radar = radar_labels,
       grid.min = 0, grid.mid = 0.5, grid.max = 1,
       group.line.width = 1, group.point.size = 3,
-      group.colours = brewer.pal(4, "Set1"),
+      # FIX: Use the dynamic number of diners for the palette
+      group.colours = brewer.pal(num_diners_in_data, "Set1"),
       legend.title = "Diner",
       plot.title = str_wrap("Average Rating Tendencies (Radar Chart)", 20)
     )
@@ -751,7 +762,7 @@ shinyServer(function(input, output, session) {
     filtered_scores() %>% select(Person, Restaurant, Food, Value, Experience, Overall)
   })
   
-  lapply(c("Will", "Phil", "Loz", "Pells"), function(diner_name) {
+  lapply(diners_list, function(diner_name) {
     output[[paste0(tolower(diner_name), "_ranks")]] <- DT::renderDataTable({
       table_data <- personal_ranks() %>% filter(Person == diner_name) %>% select(-Person)
       DT::datatable(table_data, rownames = FALSE, options = list(paging = FALSE, lengthChange = FALSE, searching = FALSE, info = FALSE), class = 'cell-border stripe')
